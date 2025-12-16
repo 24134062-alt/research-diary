@@ -1,6 +1,6 @@
 """
 File: jitter_buffer.py
-Path: C:\Users\DELL\project\pc\stt_service\jitter_buffer.py
+Path: C:\\Users\\DELL\\project\\pc\\stt_service\\jitter_buffer.py
 
 Vai trò:
 - Gom packet UDP

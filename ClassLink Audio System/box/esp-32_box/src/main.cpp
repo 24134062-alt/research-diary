@@ -1,64 +1,68 @@
-/*************************************************
- * File: main.cpp
- * Path: C:\Users\DELL\project\box\esp32_box\src\main.cpp
- *
- * Vai trò:
- * - Entry point của ESP32 BOX
- * - Khởi tạo hệ thống
- * - Gọi các module con (wifi, uart, gateway, audio)
- *
- * Ghi chú:
- * - Chưa làm logic chi tiết
- * - Chỉ để đảm bảo ESP32 boot OK
- *************************************************/
-
 #include <Arduino.h>
+#include <WiFi.h>
+#include <PubSubClient.h>
 
-// ====== Forward declarations (sẽ code sau) ======
-void wifi_init();          // wifi_ap_sta.cpp
-void uart_ctrl_init();     // uart_ctrl.cpp
-void dev_gateway_init();   // dev_gateway.cpp
-void audio_forward_init(); // audio_forward.cpp
+// --- Configuration ---
+const char* SSID = "YOUR_WIFI_SSID";
+const char* PASSWORD = "YOUR_WIFI_PASSWORD";
+const char* MQTT_SERVER = "test.mosquitto.org"; 
+const int MQTT_PORT = 1883;
 
-void uart_ctrl_loop();
-void dev_gateway_loop();
-void audio_forward_loop();
+// Pin Definitions
+#define BUTTON_PIN 0 // Boot button on most ESP32 boards
 
-// =================================================
+// Globals
+WiFiClient espClient;
+PubSubClient mqttClient(espClient);
+bool isRecording = false;
+unsigned long lastDebounceTime = 0;
+unsigned long debounceDelay = 200;
+
+void setupWiFi();
+void setupMQTT();
 
 void setup() {
-    // 1. Serial debug
-    Serial.begin(115200);
-    delay(1000);
-
-    Serial.println();
-    Serial.println("=================================");
-    Serial.println(" ESP32 BOX BOOTING...");
-    Serial.println("=================================");
-
-    // 2. Init modules
-    Serial.println("[INIT] WiFi");
-    wifi_init();
-
-    Serial.println("[INIT] UART control");
-    uart_ctrl_init();
-
-    Serial.println("[INIT] Device gateway");
-    dev_gateway_init();
-
-    Serial.println("[INIT] Audio forward");
-    audio_forward_init();
-
-    Serial.println("[OK] ESP32 BOX READY");
+  Serial.begin(115200);
+  pinMode(BUTTON_PIN, INPUT_PULLUP);
+  
+  setupWiFi();
+  setupMQTT();
+  
+  Serial.println("Box Controller Ready. Press Boot Button to Toggle Record.");
 }
 
 void loop() {
-    // Loop từng module (non-blocking)
-    uart_ctrl_loop();
-    dev_gateway_loop();
-    audio_forward_loop();
+  if (!mqttClient.connected()) {
+    if (mqttClient.connect("ESP32Box_Controller")) {
+        Serial.println("MQTT Connected");
+    }
+  }
+  mqttClient.loop();
 
-    // Nhẹ CPU
-    delay(1);
+  // Button Logic
+  if (digitalRead(BUTTON_PIN) == LOW) {
+    if ((millis() - lastDebounceTime) > debounceDelay) {
+      isRecording = !isRecording;
+      const char* msg = isRecording ? "start" : "stop";
+      
+      Serial.printf("Toggling Record: %s\n", msg);
+      mqttClient.publish("audio/control", msg);
+      
+      lastDebounceTime = millis();
+    }
+  }
 }
 
+void setupWiFi() {
+  Serial.print("Connecting to WiFi");
+  WiFi.begin(SSID, PASSWORD);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println("\nWiFi Connected");
+}
+
+void setupMQTT() {
+  mqttClient.setServer(MQTT_SERVER, MQTT_PORT);
+}

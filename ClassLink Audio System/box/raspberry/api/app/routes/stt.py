@@ -1,6 +1,6 @@
 """
 File: stt.py
-Path: C:\Users\DELL\project\box\raspberry\api\app\routes\stt.py
+Path: C:\\Users\\DELL\\project\\box\\raspberry\\api\\app\\routes\\stt.py
 
 Vai trò:
 - Nhận kết quả STT từ PC

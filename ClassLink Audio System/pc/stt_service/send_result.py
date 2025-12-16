@@ -1,6 +1,6 @@
 """
 File: send_result.py
-Path: C:\Users\DELL\project\pc\stt_service\send_result.py
+Path: C:\\Users\\DELL\\project\\pc\\stt_service\\send_result.py
 
 Vai trò:
 - Gửi kết quả STT (text) về Raspberry BOX
