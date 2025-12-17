@@ -3,13 +3,18 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 import uvicorn
 import asyncio
+from pathlib import Path
 from services.mqtt import MQTTService
 
 app = FastAPI()
 mqtt_service = MQTTService()
 
-# Mount Static Files
-app.mount("/static", StaticFiles(directory="static"), name="static")
+# Get absolute path to static directory
+BASE_DIR = Path(__file__).resolve().parent
+STATIC_DIR = BASE_DIR / "static"
+
+# Mount Static Files with absolute path
+app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 @app.on_event("startup")
 async def startup_event():
@@ -18,7 +23,7 @@ async def startup_event():
 
 @app.get("/")
 async def read_root():
-    return FileResponse('static/index.html')
+    return FileResponse(str(STATIC_DIR / 'index.html'))
 
 @app.get("/api/devices")
 def get_devices():
