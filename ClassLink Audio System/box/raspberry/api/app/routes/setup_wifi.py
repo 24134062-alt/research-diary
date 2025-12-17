@@ -25,7 +25,7 @@ async def scan_wifi():
             # Trigger fresh WiFi scan (may fail without sudo, that's OK)
             print("[WiFi Scan] Triggering rescan...")
             rescan_result = subprocess.run(
-                ["nmcli", "device", "wifi", "rescan"],
+                ["sudo", "nmcli", "device", "wifi", "rescan"],
                 capture_output=True,
                 timeout=5
             )
