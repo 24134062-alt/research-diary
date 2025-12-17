@@ -343,9 +343,158 @@ function connectToWiFi(ssid, isSecure) {
         });
 }
 
+// --- WiFi Status & Failover ---
+let currentWifiStatus = null;
+let lastSignalLevel = null;
+let hasShownWeakWarning = false;
+let hasShownCriticalModal = false;
+
+async function fetchWifiStatus() {
+    try {
+        const res = await fetch(`${API_URL}/api/wifi-manager/status`);
+        const status = await res.json();
+        currentWifiStatus = status;
+        updateWifiWidget(status);
+        checkSignalThresholds(status);
+    } catch (e) {
+        console.error('WiFi status fetch failed', e);
+    }
+}
+
+function updateWifiWidget(status) {
+    const widget = document.getElementById('wifi-status-widget');
+    if (!widget) return;
+
+    if (status.ap_mode) {
+        widget.innerHTML = `
+            <i class="fas fa-wifi" style="color: #fbbf24"></i>
+            <span>Hotspot: ${status.ssid || 'ClassLink-Setup'}</span>
+        `;
+    } else if (status.connected) {
+        const color = status.level === 'strong' ? '#34d399' :
+            status.level === 'medium' ? '#fbbf24' :
+                status.level === 'weak' ? '#fb923c' : '#ef4444';
+        widget.innerHTML = `
+            <i class="fas fa-wifi" style="color: ${color}"></i>
+            <span>${status.ssid || 'Connected'} (${status.signal}%)</span>
+        `;
+    } else {
+        widget.innerHTML = `
+            <i class="fas fa-wifi-slash" style="color: #71717a"></i>
+            <span>Not connected</span>
+        `;
+    }
+}
+
+function checkSignalThresholds(status) {
+    if (status.ap_mode || !status.connected) {
+        hasShownWeakWarning = false;
+        hasShownCriticalModal = false;
+        return;
+    }
+
+    const signal = status.signal;
+
+    // Critical: < 10%
+    if (signal < 10 && !hasShownCriticalModal) {
+        hasShownCriticalModal = true;
+        showCriticalSignalModal(status);
+    }
+    // Weak: < 30%
+    else if (signal < 30 && !hasShownWeakWarning) {
+        hasShownWeakWarning = true;
+        showWeakSignalToast(signal);
+    }
+    // Restored: >= 30%
+    else if (signal >= 30) {
+        hasShownWeakWarning = false;
+        hasShownCriticalModal = false;
+    }
+}
+
+function showWeakSignalToast(signal) {
+    showToast(`⚠️ WiFi signal weak (${signal}%)<br>Connection may become unstable`, 'warning');
+}
+
+function showCriticalSignalModal(status) {
+    const modal = document.getElementById('critical-signal-modal');
+    if (!modal) return;
+
+    document.getElementById('critical-ssid').textContent = status.ssid;
+    document.getElementById('critical-signal').textContent = `${status.signal}%`;
+    modal.classList.add('active');
+}
+
+function closeCriticalModal() {
+    document.getElementById('critical-signal-modal').classList.remove('active');
+}
+
+async function switchToHotspot() {
+    closeCriticalModal();
+    showToast('Switching to hotspot mode...', 'info');
+
+    try {
+        const res = await fetch(`${API_URL}/api/wifi-manager/switch-to-ap`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ confirm: true })
+        });
+        const result = await res.json();
+
+        if (result.status === 'success') {
+            showToast(`✅ Hotspot enabled: ${result.ssid}`, 'success');
+            fetchWifiStatus(); // Refresh
+        } else {
+            showToast(`❌ Hotspot failed: ${result.detail || result.message}`, 'error');
+        }
+    } catch (e) {
+        showToast('❌ Hotspot switch failed', 'error');
+    }
+}
+
+async function switchToClient() {
+    showToast('Switching back to WiFi...', 'info');
+
+    try {
+        const res = await fetch(`${API_URL}/api/wifi-manager/switch-to-client`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ confirm: true })
+        });
+        const result = await res.json();
+
+        if (result.status === 'success') {
+            showToast('✅ Switched back to client mode', 'success');
+            fetchWifiStatus();
+        } else {
+            showToast(`❌ Switch failed: ${result.detail || result.message}`, 'error');
+        }
+    } catch (e) {
+        showToast('❌ Mode switch failed', 'error');
+    }
+}
+
+function showToast(message, type = 'info') {
+    const container = document.getElementById('toast-container');
+    if (!container) return;
+
+    const toast = document.createElement('div');
+    toast.className = `toast toast-${type}`;
+    toast.innerHTML = message;
+
+    container.appendChild(toast);
+
+    setTimeout(() => toast.classList.add('show'), 10);
+    setTimeout(() => {
+        toast.classList.remove('show');
+        setTimeout(() => toast.remove(), 300);
+    }, 5000);
+}
+
 // Poll every 2 seconds
 setInterval(() => {
     fetchDevices();
+    fetchWifiStatus(); // Check WiFi status
 
     // Only poll chat if active view is chat
     const chatView = document.getElementById('view-chat');

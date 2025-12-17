@@ -50,6 +50,12 @@
                     <button class="btn-primary" onclick="openChatModal()">
                         <i class="fas fa-robot"></i> Giám Sát & Trợ Lý AI
                     </button>
+                    <!-- WiFi Status Widget -->
+                    <div id="wifi-status-widget"
+                        style="display: flex; align-items: center; gap: 8px; padding: 8px 16px; background: rgba(255,255,255,0.05); border-radius: 8px; color: var(--text-secondary); font-size: 0.9rem;">
+                        <i class="fas fa-wifi"></i>
+                        <span>Checking...</span>
+                    </div>
                 </div>
             </header>
 
@@ -282,6 +288,26 @@
                 <button class="btn-primary" onclick="confirmConnect()">Kết nối</button>
             </div>
         </div>
+    </div>
+
+    <!-- Critical Signal Modal -->
+    <div id="critical-signal-modal" class="modal">
+        <div class="modal-content">
+            <h3>🔴 Tín Hiệu WiFi Rất Yếu</h3>
+            <p>Kết nối tới <strong id="critical-ssid">Unknown</strong> đang có tín hiệu rất yếu (<span
+                    id="critical-signal">0%</span>).</p>
+            <p>Bạn có muốn chuyển sang chế độ Hotspot để đảm bảo kết nối ổn định?</p>
+
+            <div class="modal-actions">
+                <button class="btn-ghost" onclick="closeCriticalModal()">Giữ nguyên</button>
+                <button class="btn-primary" onclick="switchToHotspot()">Chuyển sang Hotspot</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div id="toast-container"
+        style="position: fixed; top: 80px; right: 20px; z-index: 10000; display: flex; flex-direction: column; gap: 10px;">
     </div>
 
     <script src="/static/app.js"></script>
