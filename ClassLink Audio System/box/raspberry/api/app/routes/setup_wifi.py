@@ -137,13 +137,8 @@ async def scan_wifi():
              {"ssid": "School_Guest", "signal": 60, "secure": False}
         ]
 
-    # Deduplicate by SSID
-    unique_networks = {}
-    for net in wifi_networks:
-        if net["ssid"] and net["ssid"] not in unique_networks:
-             unique_networks[net["ssid"]] = net
-    
-    return list(unique_networks.values())
+    # Return networks (already deduplicated in Linux parsing loop)
+    return wifi_networks
 
 @router.post("/connect")
 async def connect_wifi(data: dict):
