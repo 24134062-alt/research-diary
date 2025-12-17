@@ -5,10 +5,17 @@ import uvicorn
 import asyncio
 from pathlib import Path
 from services.mqtt import MQTTService
-from routes import health, setup_wifi, stt
+from services.wifi_monitor import WiFiMonitor
+from services.hotspot import HotspotController
+from routes import health, setup_wifi, stt, wifi_manager
 
 app = FastAPI()
 mqtt_service = MQTTService()
+wifi_monitor = WiFiMonitor()
+hotspot_controller = HotspotController()
+
+# Set services for wifi_manager router
+wifi_manager.set_services(wifi_monitor, hotspot_controller)
 
 # Get absolute path to static directory
 BASE_DIR = Path(__file__).resolve().parent
@@ -19,13 +26,17 @@ app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 # Include routers
 app.include_router(health.router, tags=["Health"])
-app.include_router(setup_wifi.router, prefix="/api/wifi", tags=["WiFi"])
+app.include_router(setup_wifi.router, prefix="/api/wifi", tags=["WiFi Scan"])
+app.include_router(wifi_manager.router, prefix="/api/wifi-manager", tags=["WiFi Manager"])
 app.include_router(stt.router, prefix="/api", tags=["STT"])
 
 @app.on_event("startup")
 async def startup_event():
     # Start MQTT Client in background
     asyncio.create_task(mqtt_service.start())
+    
+    # Start WiFi monitor in background
+    asyncio.create_task(wifi_monitor.start_monitoring())
 
 @app.get("/")
 async def read_root():
