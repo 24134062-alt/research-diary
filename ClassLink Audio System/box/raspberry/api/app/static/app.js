@@ -248,6 +248,76 @@ function scrollToBottom() {
     if (container) container.scrollTop = container.scrollHeight;
 }
 
+// --- WiFi Management ---
+async function scanWiFi() {
+    const button = document.querySelector('[onclick="scanWiFi()"]');
+    const container = document.getElementById('wifi-list');
+
+    // Show loading state
+    if (button) button.disabled = true;
+    if (button) button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Đang quét...';
+
+    try {
+        const res = await fetch(`${API_URL}/api/wifi/scan`);
+        const networks = await res.json();
+        renderWiFiNetworks(networks);
+    } catch (e) {
+        console.error("WiFi scan failed", e);
+        if (container) {
+            container.innerHTML = '<div class="empty-state"><p>❌ Lỗi quét WiFi. Vui lòng thử lại.</p></div>';
+        }
+    } finally {
+        // Restore button
+        if (button) {
+            button.disabled = false;
+            button.innerHTML = '<i class="fas fa-broadcast-tower"></i> Quét Mạng';
+        }
+    }
+}
+
+function renderWiFiNetworks(networks) {
+    const container = document.getElementById('wifi-list');
+    if (!container) return;
+
+    if (!networks || networks.length === 0) {
+        container.innerHTML = '<div class="empty-state"><p>Không tìm thấy mạng WiFi nào</p></div>';
+        return;
+    }
+
+    container.innerHTML = networks.map(network => `
+        <div class="wifi-item" onclick="connectToWiFi('${network.ssid}', ${network.secure})">
+            <div class="wifi-info">
+                <h4><i class="fas fa-wifi"></i> ${network.ssid}</h4>
+                <small>Signal: ${network.signal}% ${network.secure ? '🔒 Secured' : '🔓 Open'}</small>
+            </div>
+            <button class="btn-sm">Kết nối</button>
+        </div>
+    `).join('');
+}
+
+function connectToWiFi(ssid, isSecure) {
+    const password = isSecure ? prompt(`Nhập mật khẩu cho "${ssid}":`) : null;
+
+    if (isSecure && !password) {
+        alert('Cần mật khẩu để kết nối!');
+        return;
+    }
+
+    fetch(`${API_URL}/api/wifi/connect`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ssid, password })
+    })
+        .then(res => res.json())
+        .then(data => {
+            alert(`✅ ${data.message}`);
+        })
+        .catch(e => {
+            console.error("Connection failed", e);
+            alert('❌ Kết nối thất bại. Vui lòng thử lại.');
+        });
+}
+
 // Poll every 2 seconds
 setInterval(() => {
     fetchDevices();
