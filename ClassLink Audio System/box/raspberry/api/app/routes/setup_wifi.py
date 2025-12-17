@@ -144,20 +144,64 @@ async def scan_wifi():
 
 @router.post("/connect")
 async def connect_wifi(data: dict):
-    """Connect to a WiFi network"""
+    """Connect to a WiFi network and save credentials"""
+    import subprocess
+    import platform
+    
     ssid = data.get("ssid")
     password = data.get("password")
     
+    if not ssid:
+        return {"status": "error", "message": "SSID is required"}
+    
     print(f"[WiFi] Attempting to connect to {ssid}")
     
-    # TODO: Implement actual WiFi connection for Raspberry Pi
-    # Using NetworkManager: nmcli device wifi connect <ssid> password <password>
-    
-    # Simulate connection delay
-    await asyncio.sleep(2)
-    
-    return {
-        "status": "success", 
-        "message": f"Connected to {ssid}",
-        "ssid": ssid
-    }
+    if platform.system() == "Linux":
+        try:
+            # Use nmcli to connect - this automatically saves the connection profile
+            cmd = ["nmcli", "device", "wifi", "connect", ssid]
+            
+            if password:
+                cmd.extend(["password", password])
+            
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=30  # WiFi connection can take time
+            )
+            
+            if result.returncode == 0:
+                print(f"✅ Connected to {ssid}")
+                return {
+                    "status": "success",
+                    "message": f"Connected to {ssid}. Password saved.",
+                    "ssid": ssid
+                }
+            else:
+                error_msg = result.stderr.strip() or result.stdout.strip()
+                print(f"❌ Connection failed: {error_msg}")
+                return {
+                    "status": "error",
+                    "message": f"Failed to connect: {error_msg}",
+                    "ssid": ssid
+                }
+                
+        except subprocess.TimeoutExpired:
+            return {
+                "status": "error",
+                "message": "Connection timeout after 30 seconds"
+            }
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": f"Connection error: {str(e)}"
+            }
+    else:
+        # Non-Linux (testing on Windows)
+        await asyncio.sleep(2)
+        return {
+            "status": "success",
+            "message": f"[Demo] Connected to {ssid}",
+            "ssid": ssid
+        }
