@@ -1,7 +1,8 @@
 import os
 import google.generativeai as genai
-from typing import List, Optional
+from typing import List, Optional, Dict
 import logging
+import re
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -108,6 +109,69 @@ TRẢ LỜI (chỉ nội dung, không giải thích):
         except Exception as e:
             logger.error(f"Gemini API error: {e}")
             return "Xin lỗi em, AI đang bận. Hãy hỏi giáo viên nhé!"
+    
+    def detect_visual_aids(self, question: str) -> Dict[str, any]:
+        """
+        Detect if question requires visual aids (3D shapes, molecules, etc.)
+        
+        Returns:
+            dict with keys: 'has_visual', 'visual_type', 'visual_param'
+        """
+        question_lower = question.lower()
+        
+        # Shape keywords mapping
+        shape_keywords = {
+            # 2D Shapes
+            r'(hình\s+)?vuông|square': {'type': 'shape', 'param': 'square'},
+            r'(hình\s+)?tròn|circle': {'type': 'shape', 'param': 'circle'},
+
+            # 3D Shapes
+            r'(hình\s+)?lập\s+phương|hình\s+khối\s+vuông|cube': {'type': 'shape', 'param': 'cube'},
+            r'(hình\s+)?chóp|pyramid': {'type': 'shape', 'param': 'pyramid'},
+            r'(hình\s+)?cầu|sphere|quả\s+cầu': {'type': 'shape', 'param': 'sphere'},
+            r'(hình\s+)?trụ|cylinder': {'type': 'shape', 'param': 'cylinder'},
+            r'(hình\s+)?nón|cone': {'type': 'shape', 'param': 'cone'},
+            r'hình\s+hộp|rectangular\s+prism': {'type': 'shape', 'param': 'prism'},
+            
+            # Molecules
+            r'h2o|nước|phân\s+tử\s+nước|water': {'type': 'molecule', 'param': 'h2o'},
+            r'co2|cacbon\s+dioxide|khí\s+cacbonic': {'type': 'molecule', 'param': 'co2'},
+            r'ch4|metan|methane': {'type': 'molecule', 'param': 'ch4'},
+            
+            # Coordinate system
+            r'hệ\s+trục|trục\s+tọa\s+độ|coordinate': {'type': 'coordinate', 'param': 'xyz'},
+        }
+        
+        for pattern, visual_info in shape_keywords.items():
+            if re.search(pattern, question_lower):
+                logger.info(f"Visual aid detected: {visual_info['type']} - {visual_info['param']}")
+                return {
+                    'has_visual': True,
+                    'visual_type': visual_info['type'],
+                    'visual_param': visual_info['param']
+                }
+        
+        return {'has_visual': False, 'visual_type': None, 'visual_param': None}
+    
+    def ask_question_with_visual(self, question: str, student_id: str = "unknown") -> Dict[str, str]:
+        """
+        Ask question and detect if visual aids needed.
+        
+        Returns:
+            dict with keys: 'text', 'visual_type', 'visual_param'
+        """
+        # Get text answer
+        text_answer = self.ask_question(question, student_id)
+        
+        # Detect visual
+        visual_info = self.detect_visual_aids(question)
+        
+        return {
+            'text': text_answer,
+            'visual_type': visual_info['visual_type'],
+            'visual_param': visual_info['visual_param'],
+            'has_visual': visual_info['has_visual']
+        }
     
     def clear_context(self):
         """Clear all context (for new lesson)."""

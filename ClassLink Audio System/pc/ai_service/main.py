@@ -6,11 +6,12 @@ import speech_recognition as sr
 from concurrent.futures import ThreadPoolExecutor
 from ai_assistant import AITeachingAssistant
 from document_processor import DocumentProcessor
-from tts_service import TTSService
 import os
 import wave
 import io
 import time
+import paho.mqtt.client as mqtt
+import re
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -24,10 +25,6 @@ class AIService:
     def __init__(self, listen_port: int = 12346, max_concurrent: int = 6):
         """
         Initialize AI Service.
-        
-        Args:
-            listen_port: UDP port to listen for AI requests
-            max_concurrent: Maximum concurrent AI requests (default 6)
         """
         self.listen_port = listen_port
         self.max_concurrent = max_concurrent
@@ -37,7 +34,6 @@ class AIService:
         
         # AI components
         self.ai_assistant = AITeachingAssistant()
-        self.tts_service = TTSService()
         self.recognizer = sr.Recognizer()
         
         # Socket for receiving audio
@@ -50,15 +46,129 @@ class AIService:
         # Active requests tracking
         self.active_requests = {}  # {device_id: task}
         
+        # Subject Mode (Default: Math/Science)
+        self.current_subject = "math" 
+        
+        # MQTT Client for Teacher Controls
+        self.mqtt_client = mqtt.Client()
+        self.mqtt_client.on_connect = self.on_mqtt_connect
+        self.mqtt_client.on_message = self.on_mqtt_message
+        try:
+            self.mqtt_client.connect("localhost", 1883, 60)
+            self.mqtt_client.loop_start()
+            logger.info("Connected to MQTT Broker")
+        except Exception as e:
+            logger.warning(f"MQTT Connection failed: {e}")
+        
         logger.info(f"AI Service listening on port {listen_port}")
         logger.info(f"Max concurrent requests: {max_concurrent}")
+
+    def on_mqtt_connect(self, client, userdata, flags, rc):
+        logger.info("Subscribing to teacher/subject and teacher/chat/request")
+        client.subscribe("teacher/subject")
+        client.subscribe("teacher/chat/request")
+
+    def on_mqtt_message(self, client, userdata, msg):
+        try:
+            if msg.topic == "teacher/subject":
+                self.current_subject = msg.payload.decode()
+                logger.info(f"📚 SUBJECT MODE CHANGED TO: {self.current_subject.upper()}")
+            
+            elif msg.topic == "teacher/chat/request":
+                # Handle Teacher Chat
+                data = json.loads(msg.payload.decode())
+                text = data.get("text", "")
+                if text:
+                    asyncio.run_coroutine_threadsafe(self.process_teacher_chat(text), asyncio.get_event_loop())
+
+        except Exception as e:
+            logger.error(f"MQTT Message Error: {e}")
+
+    async def process_teacher_chat(self, text: str):
+        """Process text from Teacher Chatbot"""
+        logger.info(f"[TEACHER] Chat Request: {text}")
+        
+        # Ask AI
+        loop = asyncio.get_event_loop()
+        answer_data = await loop.run_in_executor(
+            self.executor,
+            self.ai_assistant.ask_question_with_visual,
+            text, # Teacher text
+            "TEACHER"
+        )
+        
+        # Send response back to MQTT
+        response = {
+            "text": answer_data['text'],
+            "visual": answer_data['visual_param'] if answer_data['has_visual'] else None
+        }
+        self.mqtt_client.publish("teacher/chat/response", json.dumps(response))
+
+    def normalize_text_by_mode(self, text: str) -> str:
+        """
+        Normalize text based on current subject mode.
+        """
+        if self.current_subject == "math":  # Consolidating 'science' under 'math' key for now or renaming? User said "môn toán... lý hóa"
+            return self.format_for_science(text)
+        elif self.current_subject == "literature": # mapping 'social' to 'literature' key
+            return self.format_for_social(text)
+        return text
+
+    def format_for_science(self, text: str) -> str:
+        """
+        Format for Logic/Calculation subjects (Math, Phy, Chem, Geo-Calc).
+        "ba cộng hai" -> "3 + 2"
+        """
+        text = text.lower()
+        
+        # 1. Basic Math Map
+        math_map = {
+            'cộng': '+', 'trừ': '-', 'nhân': '*', 'chia': '/', 'bằng': '=',
+            'phẩy': '.', 'mũ': '^', 'căn': '√'
+        }
+        for word, symbol in math_map.items():
+            text = text.replace(f" {word} ", f" {symbol} ") 
+            text = text.replace(word, symbol)
+
+        # 2. Convert common number words to digits
+        num_map = {
+            'không': '0', 'một': '1', 'hai': '2', 'ba': '3', 'bốn': '4', 
+            'năm': '5', 'lăm': '5', 'sáu': '6', 'bảy': '7', 'tám': '8', 'chín': '9', 'mười': '10'
+        }
+        for word, digit in num_map.items():
+            text = re.sub(r'\b' + word + r'\b', digit, text)
+
+        # 3. Cleanup spacing
+        text = re.sub(r'\s*([+\-*/=^√])\s*', r' \1 ', text)
+        return text.strip()
+
+    def format_for_social(self, text: str) -> str:
+        """
+        Format for History/Social subjects.
+        "năm một chín bốn lăm" -> "năm 1945"
+        """
+        text = text.lower()
+        
+        num_map = {
+            'không': '0', 'một': '1', 'hai': '2', 'ba': '3', 'bốn': '4', 
+            'năm': '5', 'lăm': '5', 'sáu': '6', 'bảy': '7', 'tám': '8', 'chín': '9'
+        }
+        
+        words = text.split()
+        new_words = []
+        for w in words:
+            if w in num_map:
+                new_words.append(num_map[w])
+            else:
+                new_words.append(w)
+        
+        processed = " ".join(new_words)
+        processed = re.sub(r'(\d)\s+(?=\d)', r'\1', processed)
+        return processed
     
     async def process_audio_packet(self, data: bytes, addr: tuple):
         """
         Process incoming audio packet.
-        
-        Packet format:
-        [1 byte flags][4 bytes sequence][N bytes audio]
         """
         if len(data) < 5:
             return
@@ -80,104 +190,97 @@ class AIService:
         
         self.audio_buffers[device_id].extend(audio_data)
         
-        # Simple end detection: if buffer > 3 seconds worth of audio (16kHz * 2 bytes * 3s)
+        # Simple end detection: if buffer > 3 seconds worth of audio
         if len(self.audio_buffers[device_id]) > 96000:
-            # Check if we're at capacity
+            # Check capacity
             if len(self.active_requests) >= self.max_concurrent:
                 logger.warning(f"At capacity ({self.max_concurrent}), student {device_id} must wait")
-                # Send "please wait" message
-                await self.send_response(addr, "He thong dang ban. Xin cho 10s", None)
+                await self.send_response(addr, "He thong dang ban. Xin cho 10s")
                 self.audio_buffers[device_id] = bytearray()
                 return
             
-            # Process in parallel (non-blocking)
+            # Process in parallel
             audio_copy = bytes(self.audio_buffers[device_id])
             self.audio_buffers[device_id] = bytearray()
             
-            # Create async task
             task = asyncio.create_task(self.process_question(device_id, audio_copy, addr))
             self.active_requests[device_id] = task
             
-            # Cleanup task when done
             task.add_done_callback(lambda t: self.active_requests.pop(device_id, None))
     
     async def process_question(self, device_id: str, audio_bytes: bytes, addr: tuple):
         """
-        Process complete question audio (runs in parallel).
-        
-        Args:
-            device_id: Device identifier
-            audio_bytes: Raw PCM audio (16kHz, 16-bit, mono)
-            addr: Device address for sending response
+        Process complete question audio.
         """
         start_time = time.time()
-        logger.info(f"[{device_id}] Processing AI question (active: {len(self.active_requests)}/{self.max_concurrent})")
+        logger.info(f"[{device_id}] Processing AI question")
         
         try:
-            # Convert raw PCM to WAV for speech recognition
+            # Convert PCM to WAV
             wav_data = self.pcm_to_wav(audio_bytes, sample_rate=16000, channels=1, sample_width=2)
             
-            # STT: Audio -> Text (run in executor to avoid blocking)
+            # STT
             loop = asyncio.get_event_loop()
             audio_source = sr.AudioFile(io.BytesIO(wav_data))
             with audio_source as source:
                 audio = self.recognizer.record(source)
             
-            # Run Google STT in executor thread (blocking operation)
-            question_text = await loop.run_in_executor(
+            # Google STT
+            raw_text = await loop.run_in_executor(
                 self.executor,
                 self.recognizer.recognize_google,
                 audio,
                 'vi-VN'
             )
-            logger.info(f"[{device_id}] Question: {question_text}")
             
-            # Ask AI (run in executor thread - Gemini API is blocking)
-            answer_text = await loop.run_in_executor(
+            # 🧮 APPLY SUBJECT MODE FORMATTING
+            processed_text = self.normalize_text_by_mode(raw_text)
+            logger.info(f"[{device_id}] Question ({self.current_subject}): {processed_text}")
+            
+            # Ask AI
+            answer_data = await loop.run_in_executor(
                 self.executor,
-                self.ai_assistant.ask_question,
-                question_text,
+                self.ai_assistant.ask_question_with_visual,
+                processed_text,
                 device_id
             )
+            
+            answer_text = answer_data['text']
+            has_visual = answer_data['has_visual']
+            visual_type = answer_data['visual_type']
+            visual_param = answer_data['visual_param']
+            
             logger.info(f"[{device_id}] Answer: {answer_text}")
+            if has_visual:
+                logger.info(f"[{device_id}] Visual: {visual_type}/{visual_param}")
             
-            # TTS: Text -> Audio (run in executor thread)
-            audio_file = await loop.run_in_executor(
-                self.executor,
-                self.tts_service.text_to_speech,
-                answer_text,
-                f"{device_id.replace(':', '_')}_response.mp3"
-            )
-            
-            # Send response back to device
-            await self.send_response(addr, answer_text, audio_file)
+            # PUBLISH LOG FOR TEACHER DASHBOARD
+            log_payload = {
+                "student": device_id,
+                "question": processed_text,
+                "answer": answer_text
+            }
+            self.mqtt_client.publish("student/query/log", json.dumps(log_payload))
+
+            await self.send_response(addr, answer_text, visual_type, visual_param)
             
             elapsed = time.time() - start_time
             logger.info(f"[{device_id}] Completed in {elapsed:.2f}s")
             
         except sr.UnknownValueError:
             logger.warning(f"[{device_id}] Could not understand audio")
-            await self.send_response(addr, "Xin loi, em noi lai duoc khong?", None)
+            await self.send_response(addr, "Xin loi, em noi lai duoc khong?", None, None)
         except Exception as e:
             logger.error(f"[{device_id}] Error processing question: {e}")
-            await self.send_response(addr, "Xin loi, co loi xay ra", None)
+            await self.send_response(addr, "Xin loi, co loi xay ra", None, None)
     
-    async def send_response(self, addr: tuple, text: str, audio_file: str = None):
-        """
-        Send AI response back to device.
-        
-        Args:
-            addr: Device address
-            text: Response text (for OLED display)
-            audio_file: Path to audio file (optional)
-        """
-        # TODO: Implement response protocol
-        # For now, just log
+    async def send_response(self, addr: tuple, text: str, 
+                           visual_type: str = None, visual_param: str = None):
+        """Send response back to device."""
+        # TODO: Implement response protocol via MQTT
         logger.info(f"Sending response to {addr}: {text}")
-        
-        # Response packet format (to be implemented):
-        # [1 byte type=AI_RESPONSE][N bytes text]
-        # Followed by audio packets if available
+        if visual_type:
+            logger.info(f"  Visual: {visual_type}/{visual_param}")
     
     @staticmethod
     def pcm_to_wav(pcm_data: bytes, sample_rate: int, channels: int, sample_width: int) -> bytes:
@@ -204,7 +307,6 @@ class AIService:
                 logger.error(f"Error in main loop: {e}")
     
     def load_document(self, file_path: str):
-        """Load lecture document."""
         content = DocumentProcessor.extract_text(file_path)
         if content:
             self.ai_assistant.load_lecture(content)
@@ -214,23 +316,18 @@ class AIService:
 
 
 async def main():
-    """Entry point."""
-    # Check for API key
     if not os.getenv("GEMINI_API_KEY"):
         logger.error("GEMINI_API_KEY environment variable not set!")
-        logger.info("Get your free API key at: https://makersuite.google.com/app/apikey")
         return
     
     service = AIService(listen_port=12346)
     
-    # Auto-load any documents in /data/lectures/ if exists
     lectures_dir = "data/lectures"
     if os.path.exists(lectures_dir):
         for filename in os.listdir(lectures_dir):
             if filename.endswith(('.pdf', '.docx', '.txt')):
                 service.load_document(os.path.join(lectures_dir, filename))
     
-    # Run service
     await service.run()
 
 
@@ -239,6 +336,3 @@ if __name__ == "__main__":
         asyncio.run(main())
     except KeyboardInterrupt:
         logger.info("AI Service stopped by user")
-    finally:
-        # Cleanup executor
-        logger.info("Shutting down thread pool...")
