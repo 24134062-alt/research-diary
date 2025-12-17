@@ -130,4 +130,17 @@ class MQTTService:
         # In demo mode, just log the action
         else:
             print(f"📤 [DEMO] Would publish to {topic}: {payload}")
-
+    
+    async def start(self):
+        """Start MQTT service (connect and loop)"""
+        if MQTT_AVAILABLE and self.client:
+            try:
+                print(f"🔌 Connecting to MQTT broker: {self.broker}:{self.port}")
+                self.client.connect(self.broker, self.port, 60)
+                # Run loop in background
+                self.client.loop_start()
+                print("✅ MQTT service started successfully")
+            except Exception as e:
+                print(f"⚠️  MQTT connection failed: {e}. Running in standalone mode.")
+        else:
+            print("📡 MQTT service running in DEMO mode - no broker connection")
