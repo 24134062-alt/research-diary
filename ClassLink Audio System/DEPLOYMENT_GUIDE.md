@@ -20,7 +20,7 @@ ClassLink Audio System là hệ thống quản lý âm thanh thông minh cho l�
 
 - ✅ Raspberry Pi (đã cài sẵn hệ thống)
 - ✅ Nguồn điện 5V/3A cho Raspberry Pi
-- ✅ Mạng WiFi (2.4GHz hoặc 5GHz)
+- ✅ Thiết bị có WiFi (PC, điện thoại, máy tính bảng)
 
 ---
 
@@ -29,38 +29,82 @@ ClassLink Audio System là hệ thống quản lý âm thanh thông minh cho l�
 1. **Cắm nguồn** cho Raspberry Pi
 2. **Đợi 30-60 giây** để hệ thống khởi động hoàn toàn
 3. LED xanh trên Raspberry Pi sẽ nhấp nháy khi đang hoạt động
+4. **Raspberry Pi sẽ tự động phát WiFi hotspot:** `ClassLink-Setup`
 
 ---
 
-### **Bước 3: Kết Nối WiFi**
+### **Bước 3: Kết Nối WiFi Hotspot**
 
-Raspberry Pi cần kết nối cùng mạng WiFi với máy tính/điện thoại của bạn.
+1. **Trên thiết bị của bạn** (PC/điện thoại), mở danh sách WiFi
+2. **Tìm và kết nối** WiFi: `ClassLink-Setup`
+   - Password (nếu có): `classlink2024`
+3. **Đợi kết nối thành công**
 
-**Nếu đã được cấu hình WiFi sẵn:**
-- Raspberry Pi sẽ tự động kết nối
-
-**Nếu chưa:**
-- Kết nối màn hình + bàn phím vào Raspberry Pi
-- Cấu hình WiFi qua giao diện desktop hoặc lệnh `raspi-config`
+> **Lưu ý:** Một số thiết bị có thể báo "No Internet" - đây là bình thường vì đang kết nối WiFi setup, chưa có Internet.
 
 ---
 
-### **Bước 4: Truy Cập Web Dashboard**
+### **Bước 4: Truy Cập Trang Cấu Hình**
 
-1. **Mở trình duyệt** (Chrome, Edge, Firefox)
-2. **Nhập địa chỉ:**
+1. **Mở trình duyệt** (Chrome, Edge, Firefox, Safari)
+2. **Truy cập một trong các địa chỉ sau:**
+   
+   **Cách 1 (Tự động):**
+   - Một số thiết bị sẽ tự động mở trang captive portal
+   
+   **Cách 2 (Thủ công):**
+   ```
+   http://192.168.4.1:8000
+   ```
+   
+   **Cách 3 (Hostname):**
+   ```
+   http://classlink.local:8000
+   ```
+
+3. **Bạn sẽ thấy** trang **ClassLink Audio Manager** với giao diện màu đen/xanh lá
+
+---
+
+### **Bước 5: Cấu Hình WiFi Chính**
+
+1. **Trên web dashboard**, click vào tab **"Cấu Hình WiFi"** (biểu tượng WiFi ở sidebar trái)
+
+2. **Nhấn nút "Quét Mạng"** để tìm các WiFi xung quanh
+
+3. **Chọn WiFi** mà bạn muốn Raspberry Pi kết nối (WiFi trường học/nhà/cơ quan)
+
+4. **Nhập mật khẩu** WiFi (nếu có)
+
+5. **Nhấn "Kết Nối"**
+
+6. **Đợi 10-30 giây** - Raspberry Pi sẽ:
+   - Kết nối WiFi mới
+   - Tự động tắt hotspot `ClassLink-Setup` (hoặc giữ song song)
+   - Khởi động lại web service
+
+---
+
+### **Bước 6: Kết Nối Lại Vào WiFi Chính**
+
+1. **Trên thiết bị của bạn**, ngắt kết nối WiFi `ClassLink-Setup`
+2. **Kết nối lại** WiFi chính (WiFi mà bạn vừa cấu hình cho Raspberry Pi)
+3. **Truy cập dashboard** bằng:
    ```
    http://raspberrypi.local:8000
    ```
    
-   **Nếu không kết nối được**, thử các cách sau:
-   
-   - **Cách 2:** Tìm IP của Raspberry Pi:
-     ```bash
-     # Trên Raspberry Pi, chạy lệnh:
-     hostname -I
-     ```
-     Sau đó truy cập: `http://<IP>:8000` (ví dụ: `http://192.168.0.105:8000`)
+   Hoặc nếu không được, tìm IP của Raspberry Pi trên router
+
+---
+
+### **Bước 7: Hoàn Tất!**
+
+Bây giờ bạn có thể:
+- ✅ Quản lý thiết bị học sinh
+- ✅ Giám sát AI Trợ Giảng
+- ✅ Chuyển đổi chế độ giảng dạy (Tự Nhiên / Xã Hội)
+- ✅ Xem log hoạt động
 
 ---
 
