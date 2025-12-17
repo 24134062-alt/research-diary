@@ -46,6 +46,11 @@ async def scan_wifi():
             )
             output = result.decode("utf-8", errors="ignore")
             
+            # DEBUG: Print raw output
+            print(f"[WiFi Scan] Raw nmcli output:")
+            print(output)
+            print(f"[WiFi Scan] Total lines: {len(output.splitlines())}")
+            
             seen_ssids = set()
             for line in output.splitlines():
                 parts = line.split(":")
@@ -70,6 +75,8 @@ async def scan_wifi():
                         "signal": signal_int,
                         "secure": bool(security and security != "--")
                     })
+            
+            print(f"[WiFi Scan] Parsed {len(wifi_networks)} networks")
             
             # Sort by signal strength (highest first)
             wifi_networks.sort(key=lambda x: x["signal"], reverse=True)
