@@ -7,7 +7,7 @@ from pathlib import Path
 from services.mqtt import MQTTService
 from services.wifi_monitor import WiFiMonitor
 from services.hotspot import HotspotController
-from routes import health, setup_wifi, stt, wifi_manager
+from routes import health, setup_wifi, stt, wifi_manager, system
 
 app = FastAPI()
 mqtt_service = MQTTService()
@@ -29,6 +29,7 @@ app.include_router(health.router, tags=["Health"])
 app.include_router(setup_wifi.router, prefix="/api/wifi", tags=["WiFi Scan"])
 app.include_router(wifi_manager.router, prefix="/api/wifi-manager", tags=["WiFi Manager"])
 app.include_router(stt.router, prefix="/api", tags=["STT"])
+app.include_router(system.router, prefix="/api/system", tags=["System"])
 
 @app.on_event("startup")
 async def startup_event():

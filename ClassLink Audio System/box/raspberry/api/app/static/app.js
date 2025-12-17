@@ -78,20 +78,45 @@ async function setSubject(subject) {
 }
 
 // Navigation
-function switchView(viewName) {
+function showView(viewId) {
     // Hide all views
-    document.querySelectorAll('.view-section').forEach(el => el.classList.remove('active'));
-    // Show selected view
-    document.getElementById(`view-${viewName}`).classList.add('active');
+    const views = document.querySelectorAll('.view-section');
+    views.forEach(view => view.classList.remove('active'));
 
-    // Update Sidebar Active State
-    document.querySelectorAll('.nav-item').forEach(btn => btn.classList.remove('active'));
-    // Find button that calls this view
-    const navBtns = document.querySelectorAll('.nav-item');
-    if (viewName === 'dashboard') navBtns[0].classList.add('active');
-    if (viewName === 'wifi') navBtns[1].classList.add('active');
-    // if (viewName === 'chat') navBtns[2].classList.add('active');
-    if (viewName === 'settings') navBtns[2].classList.add('active');
+    // Show selected view
+    const selectedView = document.getElementById(viewId);
+    if (selectedView) {
+        selectedView.classList.add('active');
+    }
+
+    // Update nav active state
+    const navItems = document.querySelectorAll('.nav-item');
+    navItems.forEach(item => item.classList.remove('active'));
+    const activeNavItem = document.querySelector(`[onclick="showView('${viewId}')"]`);
+    if (activeNavItem) {
+        activeNavItem.classList.add('active');
+    }
+
+    // Update page title
+    const titles = {
+        'view-dashboard': 'Trang Chủ Quan Trị',
+        'view-devices': 'Quản Lý Thiết Bị',
+        'view-wifi': 'Cấu Hình WiFi',
+        'view-settings': 'Cài Đặt'
+    };
+    const subtitles = {
+        'view-dashboard': 'Quản lý thiết bị và chế độ giảng dạy',
+        'view-devices': 'Theo dõi và điều khiển các thiết bị kết nối',
+        'view-wifi': 'Kết nối và quản lý mạng không dây',
+        'view-settings': 'Cấu hình hệ thống và công cụ phát triển'
+    };
+    document.getElementById('page-title').textContent = titles[viewId] || 'Dashboard';
+    document.getElementById('page-subtitle').textContent = subtitles[viewId] || '';
+
+    // Fetch system info when opening settings
+    if (viewId === 'view-settings') {
+        fetchSystemInfo();
+    }
 }
 
 // --- Chat & Assistant Logic (Messenger Style) ---
@@ -489,6 +514,91 @@ function showToast(message, type = 'info') {
         toast.classList.remove('show');
         setTimeout(() => toast.remove(), 300);
     }, 5000);
+}
+
+// --- Code Management ---
+async function fetchSystemInfo() {
+    try {
+        const res = await fetch(`${API_URL}/api/system/system-info`);
+        const info = await res.json();
+
+        document.getElementById('git-branch').textContent = info.branch;
+        document.getElementById('git-commit').textContent = info.last_commit;
+    } catch (e) {
+        console.error('Failed to fetch system info', e);
+    }
+}
+
+async function downloadCode() {
+    const password = prompt('Nhập mật khẩu admin để tải code:');
+    if (!password) return;
+
+    showToast('Đang tạo file ZIP...', 'info');
+
+    try {
+        const res = await fetch(`${API_URL}/api/system/download-code`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ password })
+        });
+
+        if (res.status === 401) {
+            showToast('❌ Mật khẩu không đúng!', 'error');
+            return;
+        }
+
+        if (!res.ok) {
+            showToast('❌ Lỗi tải code', 'error');
+            return;
+        }
+
+        // Download file
+        const blob = await res.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'classlink-code.zip';
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+
+        showToast('✅ Code đã tải về thành công!', 'success');
+    } catch (e) {
+        showToast('❌ Lỗi: ' + e.message, 'error');
+    }
+}
+
+async function updateCode() {
+    const password = prompt('Nhập mật khẩu admin để cập nhật code từ GitHub:');
+    if (!password) return;
+
+    showToast('Đang pull code từ GitHub...', 'info');
+
+    try {
+        const res = await fetch(`${API_URL}/api/system/update-code`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ password })
+        });
+
+        if (res.status === 401) {
+            showToast('❌ Mật khẩu không đúng!', 'error');
+            return;
+        }
+
+        const result = await res.json();
+
+        if (result.status === 'success') {
+            showToast('✅ ' + result.message, 'success');
+            // Refresh system info
+            setTimeout(fetchSystemInfo, 1000);
+        } else {
+            showToast('❌ ' + result.message, 'error');
+        }
+    } catch (e) {
+        showToast('❌ Lỗi: ' + e.message, 'error');
+    }
 }
 
 // Poll every 2 seconds

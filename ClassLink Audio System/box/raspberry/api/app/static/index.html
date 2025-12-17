@@ -266,6 +266,35 @@
                     <div class="info-row">
                         <span>Giao thức:</span> <strong>MQTT + UDP</strong>
                     </div>
+                    <div class="info-row">
+                        <span>Git Branch:</span> <strong id="git-branch">Loading...</strong>
+                    </div>
+                    <div class="info-row">
+                        <span>Last Commit:</span> <strong id="git-commit">Loading...</strong>
+                    </div>
+                </div>
+
+                <div class="panel" style="margin-top: 20px;">
+                    <h2>Công Cụ Phát Triển</h2>
+                    <p style="color: var(--text-secondary); margin-bottom: 16px;">Quản lý mã nguồn và cập nhật hệ thống
+                    </p>
+
+                    <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+                        <button class="btn-primary" onclick="downloadCode()">
+                            <i class="fas fa-download"></i> Tải Code về Máy
+                        </button>
+                        <button class="btn-primary" onclick="updateCode()">
+                            <i class="fas fa-sync-alt"></i> Cập Nhật Code
+                        </button>
+                    </div>
+
+                    <div
+                        style="margin-top: 16px; padding: 12px; background: rgba(251, 191, 36, 0.1); border-left: 3px solid #fbbf24; border-radius: 4px;">
+                        <small style="color: #fbbf24;">
+                            <i class="fas fa-exclamation-triangle"></i> <strong>Lưu ý:</strong> Các chức năng này yêu
+                            cầu mật khẩu admin.
+                        </small>
+                    </div>
                 </div>
             </section>
 
