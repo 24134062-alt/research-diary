@@ -381,6 +381,33 @@ header {
     background: rgba(255, 255, 255, 0.02);
 }
 
+.wifi-item .btn-sm {
+    background: var(--primary);
+    color: #000;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 0.85rem;
+    transition: opacity 0.2s;
+}
+
+.wifi-item .btn-sm:hover {
+    opacity: 0.9;
+}
+
+.wifi-info h4 {
+    margin: 0 0 6px 0;
+    font-size: 1rem;
+    color: var(--text-primary);
+}
+
+.wifi-info small {
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+}
+
 .empty-state {
     text-align: center;
     padding: 40px;
