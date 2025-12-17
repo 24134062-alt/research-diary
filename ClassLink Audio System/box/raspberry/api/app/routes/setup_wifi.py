@@ -22,20 +22,23 @@ async def scan_wifi():
     if platform.system() == "Linux":
         # Real WiFi scanning for Raspberry Pi using nmcli
         try:
-            # Trigger fresh WiFi scan
+            # Trigger fresh WiFi scan (may fail without sudo, that's OK)
             print("[WiFi Scan] Triggering rescan...")
-            subprocess.run(
+            rescan_result = subprocess.run(
                 ["nmcli", "device", "wifi", "rescan"],
                 capture_output=True,
                 timeout=5
             )
-            # Note: rescan command may fail without sudo, but that's OK
-            # NetworkManager will still scan periodically
             
-            # Wait a moment for scan results to populate
-            await asyncio.sleep(1.5)
+            # Check if rescan succeeded
+            if rescan_result.returncode == 0:
+                print("[WiFi Scan] Rescan triggered successfully, waiting for results...")
+                await asyncio.sleep(3)  # Wait longer for fresh results
+            else:
+                print(f"[WiFi Scan] Rescan failed (code {rescan_result.returncode}), using cached results")
+                # NetworkManager scans periodically anyway, so cached results are fine
             
-            # Get WiFi list
+            # Get WiFi list (includes both fresh and cached networks)
             result = subprocess.check_output(
                 ["nmcli", "-t", "-f", "SSID,SIGNAL,SECURITY", "device", "wifi", "list"],
                 stderr=subprocess.STDOUT,
