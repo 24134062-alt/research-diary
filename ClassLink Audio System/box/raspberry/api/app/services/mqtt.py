@@ -4,6 +4,7 @@ import paho.mqtt.client as mqtt
 from .registry import DeviceRegistry
 from .router import AudioRouter
 
+class MQTTService:
     def set_mode(self, device_id, mode):
         self.publish("audio/control", {"target": device_id, "command": "set_mode", "mode": mode})
         self.registry.set_mode(device_id, mode)
