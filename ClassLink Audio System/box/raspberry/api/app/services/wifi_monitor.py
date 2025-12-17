@@ -42,26 +42,49 @@ class WiFiMonitor:
     async def check_signal(self):
         """Check current WiFi signal strength"""
         try:
-            # Get current connection info
-            result = subprocess.run(
+            # Get active WiFi connection name and SSID
+            conn_result = subprocess.run(
+                ["nmcli", "-t", "-f", "NAME,TYPE,DEVICE", "connection", "show", "--active"],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            
+            active_wifi = None
+            if conn_result.returncode == 0:
+                for line in conn_result.stdout.strip().split('\n'):
+                    parts = line.split(':')
+                    if len(parts) >= 3 and parts[1] == '802-11-wireless':
+                        # Found active WiFi connection
+                        active_wifi = parts[0]
+                        break
+            
+            if not active_wifi:
+                self.is_connected = False
+                self.current_signal = 0
+                self.current_ssid = None
+                return
+            
+            # Get signal strength for active connection
+            signal_result = subprocess.run(
                 ["nmcli", "-t", "-f", "IN-USE,SSID,SIGNAL", "device", "wifi", "list"],
                 capture_output=True,
                 text=True,
                 timeout=5
             )
             
-            if result.returncode != 0:
+            if signal_result.returncode != 0:
                 self.is_connected = False
                 return
             
             # Parse output - find the connected network (marked with *)
-            for line in result.stdout.strip().split('\n'):
+            for line in signal_result.stdout.strip().split('\n'):
                 parts = line.split(':')
-                if len(parts) >= 3 and parts[0] == '*':
+                if len(parts) >= 3 and parts[0].strip() in ['*', '* ']:
                     # This is the active connection
-                    self.current_ssid = parts[1]
+                    self.current_ssid = parts[1].strip()
                     try:
-                        self.current_signal = int(parts[2])
+                        self.current_signal = int(parts[2].strip())
                     except:
                         self.current_signal = 0
                     
@@ -69,10 +92,14 @@ class WiFiMonitor:
                     await self.evaluate_signal_level()
                     return
             
-            # Not connected to any network
-            self.is_connected = False
-            self.current_signal = 0
-            self.current_ssid = None
+            # Fallback: Connected but couldn't find in list (maybe just connected)
+            if active_wifi:
+                self.is_connected = True
+                self.current_ssid = active_wifi
+                # Use a default moderate signal if we can't detect it
+                if self.current_signal == 0:
+                    self.current_signal = 50
+                await self.evaluate_signal_level()
             
         except subprocess.TimeoutExpired:
             print("[WiFi Monitor] nmcli timeout")
