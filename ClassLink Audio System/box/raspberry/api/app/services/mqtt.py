@@ -1,12 +1,20 @@
 import asyncio
 import json
-import paho.mqtt.client as mqtt
 from .registry import DeviceRegistry
 from .router import AudioRouter
 
+# Optional MQTT dependency - allow API to run in demo mode without paho-mqtt
+try:
+    import paho.mqtt.client as mqtt
+    MQTT_AVAILABLE = True
+except ImportError:
+    MQTT_AVAILABLE = False
+    print("⚠️  paho-mqtt not installed - MQTT service running in DEMO mode")
+
 class MQTTService:
     def set_mode(self, device_id, mode):
-        self.publish("audio/control", {"target": device_id, "command": "set_mode", "mode": mode})
+        if MQTT_AVAILABLE:
+            self.publish("audio/control", {"target": device_id, "command": "set_mode", "mode": mode})
         self.registry.set_mode(device_id, mode)
 
     # --- Chatbot & Monitoring Extensions ---
@@ -22,12 +30,7 @@ class MQTTService:
         client.subscribe("student/query/log")     # Logs from student interactions
 
     def __init__(self):
-        self.client = mqtt.Client()
-        self.client.on_connect = self.on_connect
-        self.client.on_message = self.on_message
-        self.broker = "test.mosquitto.org" # Or local "localhost"
-        self.port = 1883
-        
+        # Initialize registry and router (always needed)
         self.registry = DeviceRegistry()
         self.router = AudioRouter(self.registry)
         
@@ -37,6 +40,17 @@ class MQTTService:
             "broadcast": [] # System/Broadcast channel
         }
         self.max_history_per_session = 50
+        
+        # Initialize MQTT client only if library is available
+        if MQTT_AVAILABLE:
+            self.client = mqtt.Client()
+            self.client.on_connect = self.on_connect
+            self.client.on_message = self.on_message
+            self.broker = "test.mosquitto.org" # Or local "localhost"
+            self.port = 1883
+        else:
+            self.client = None
+            print("📡 MQTT features disabled - API running in standalone mode")
 
     def on_message(self, client, userdata, msg):
         try:
@@ -105,3 +119,15 @@ class MQTTService:
             "session_id": session_id,
             "source": "web_dashboard"
         })
+    
+    def publish(self, topic, payload):
+        """Publish message to MQTT broker (if available)"""
+        if MQTT_AVAILABLE and self.client:
+            try:
+                self.client.publish(topic, json.dumps(payload))
+            except Exception as e:
+                print(f"⚠️  MQTT publish failed: {e}")
+        # In demo mode, just log the action
+        else:
+            print(f"📤 [DEMO] Would publish to {topic}: {payload}")
+
