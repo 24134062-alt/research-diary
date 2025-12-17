@@ -3,7 +3,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 import uvicorn
 import asyncio
-from app.services.mqtt import MQTTService
+from services.mqtt import MQTTService
 
 app = FastAPI()
 mqtt_service = MQTTService()
