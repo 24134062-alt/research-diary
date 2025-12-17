@@ -284,11 +284,36 @@ function renderWiFiNetworks(networks) {
         return;
     }
 
+    // Helper function to get WiFi icon based on signal strength
+    function getSignalIcon(signal) {
+        if (signal >= 75) return '<i class="fas fa-wifi" style="color: #34d399"></i>'; // Strong - Green
+        if (signal >= 50) return '<i class="fas fa-wifi" style="color: #fbbf24"></i>'; // Medium - Yellow
+        if (signal >= 25) return '<i class="fas fa-wifi" style="color: #fb923c"></i>'; // Weak - Orange
+        return '<i class="fas fa-wifi" style="color: #ef4444"></i>'; // Very weak - Red
+    }
+
+    // Helper function to get signal bars (visual representation)
+    function getSignalBars(signal) {
+        const bars = Math.ceil(signal / 25); // 0-25=1, 26-50=2, 51-75=3, 76-100=4
+        let html = '<div class="signal-bars" style="display: inline-flex; gap: 2px; align-items: flex-end;">';
+        for (let i = 1; i <= 4; i++) {
+            const height = i * 25;
+            const color = i <= bars ? (signal >= 75 ? '#34d399' : signal >= 50 ? '#fbbf24' : signal >= 25 ? '#fb923c' : '#ef4444') : '#334155';
+            html += `<div style="width: 3px; height: ${height}%; background: ${color}; border-radius: 1px;"></div>`;
+        }
+        html += '</div>';
+        return html;
+    }
+
     container.innerHTML = networks.map(network => `
         <div class="wifi-item" onclick="connectToWiFi('${network.ssid}', ${network.secure})">
             <div class="wifi-info">
-                <h4><i class="fas fa-wifi"></i> ${network.ssid}</h4>
-                <small>Signal: ${network.signal}% ${network.secure ? '🔒 Secured' : '🔓 Open'}</small>
+                <h4>${getSignalIcon(network.signal)} ${network.ssid}</h4>
+                <small>
+                    ${getSignalBars(network.signal)}
+                    <span style="margin-left: 8px;">Signal: ${network.signal}%</span>
+                    ${network.secure ? '🔒 Secured' : '🔓 Open'}
+                </small>
             </div>
             <button class="btn-sm">Kết nối</button>
         </div>

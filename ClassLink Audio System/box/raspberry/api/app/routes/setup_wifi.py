@@ -18,37 +18,88 @@ async def scan_wifi():
     
     wifi_networks = []
     
-    if platform.system() == "Windows":
+    if platform.system() == "Linux":
+        # Real WiFi scanning for Raspberry Pi using nmcli
         try:
-            # Run the netsh command to get wifi networks
-            result = subprocess.check_output(["netsh", "wlan", "show", "networks", "mode=bssid"], stderr=subprocess.STDOUT)
+            # Use nmcli to scan WiFi networks
+            result = subprocess.check_output(
+                ["nmcli", "-t", "-f", "SSID,SIGNAL,SECURITY", "device", "wifi", "list"],
+                stderr=subprocess.STDOUT,
+                timeout=10
+            )
+            output = result.decode("utf-8", errors="ignore")
+            
+            seen_ssids = set()
+            for line in output.splitlines():
+                parts = line.split(":")
+                if len(parts) >= 3:
+                    ssid = parts[0].strip()
+                    signal = parts[1].strip()
+                    security = parts[2].strip()
+                    
+                    # Skip empty SSIDs and duplicates
+                    if not ssid or ssid in seen_ssids:
+                        continue
+                    
+                    seen_ssids.add(ssid)
+                    
+                    try:
+                        signal_int = int(signal)
+                    except:
+                        signal_int = 0
+                    
+                    wifi_networks.append({
+                        "ssid": ssid,
+                        "signal": signal_int,
+                        "secure": bool(security and security != "--")
+                    })
+            
+            # Sort by signal strength (highest first)
+            wifi_networks.sort(key=lambda x: x["signal"], reverse=True)
+            
+        except subprocess.TimeoutExpired:
+            print("[WiFi] Scan timeout")
+            return [{"ssid": "⚠️ Scan timeout", "signal": 0, "secure": False}]
+        except FileNotFoundError:
+            print("[WiFi] nmcli not found - NetworkManager not installed")
+            return [{"ssid": "❌ NetworkManager not installed", "signal": 0, "secure": False}]
+        except Exception as e:
+            print(f"[WiFi] Linux scan error: {e}")
+            # Fallback mock for demo
+            return [
+                {"ssid": "ClassLink_Teacher", "signal": 90, "secure": True},
+                {"ssid": "School_Guest", "signal": 60, "secure": False}
+            ]
+    
+    elif platform.system() == "Windows":
+        # Windows WiFi scanning (for testing)
+        try:
+            result = subprocess.check_output(
+                ["netsh", "wlan", "show", "networks", "mode=bssid"], 
+                stderr=subprocess.STDOUT
+            )
             output = result.decode("utf-8", errors="ignore")
             
             current_ssid = None
-            current_bssid = None
             current_signal = None
             
             for line in output.splitlines():
                 line = line.strip()
                 if line.startswith("SSID"):
-                    # Save previous if complete
                     if current_ssid:
                         wifi_networks.append({
                             "ssid": current_ssid,
-                            "bssid": current_bssid,
                             "signal": current_signal or 0,
                             "secure": True 
                         })
                     current_ssid = line.split(":", 1)[1].strip()
-                    current_bssid = None # Reset
                     current_signal = None
                 elif line.startswith("Signal"):
                      try:
                         current_signal = int(line.split(":", 1)[1].strip().replace("%", ""))
                      except:
                         current_signal = 0
-                
-            # Add the last one
+            
             if current_ssid:
                 wifi_networks.append({
                     "ssid": current_ssid,
@@ -57,15 +108,13 @@ async def scan_wifi():
                 })
                 
         except Exception as e:
-            print(f"Error scanning wifi: {e}")
-            # Fallback mock if scan fails
+            print(f"[WiFi] Windows scan error: {e}")
             return [
                 {"ssid": "ClassLink_Teacher", "signal": 90, "secure": True},
                 {"ssid": "School_Guest", "signal": 60, "secure": False}
             ]
     else:
-        # Mock for non-windows (Linux/Raspberry Pi would use nmcli or iwlist)
-        # TODO: Implement actual WiFi scanning for Raspberry Pi
+        # Unknown OS - return mock
         return [
              {"ssid": "ClassLink_Teacher", "signal": 90, "secure": True},
              {"ssid": "School_Guest", "signal": 60, "secure": False}
