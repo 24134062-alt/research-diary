@@ -5,6 +5,7 @@ import uvicorn
 import asyncio
 from pathlib import Path
 from services.mqtt import MQTTService
+from routes import health, setup_wifi, stt
 
 app = FastAPI()
 mqtt_service = MQTTService()
@@ -15,6 +16,11 @@ STATIC_DIR = BASE_DIR / "static"
 
 # Mount Static Files with absolute path
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+
+# Include routers
+app.include_router(health.router, tags=["Health"])
+app.include_router(setup_wifi.router, prefix="/api/wifi", tags=["WiFi"])
+app.include_router(stt.router, prefix="/api", tags=["STT"])
 
 @app.on_event("startup")
 async def startup_event():
@@ -53,73 +59,9 @@ async def set_subject(subject: str):
     return {"status": "Subject Updated", "subject": subject}
 
 
-@app.get("/api/wifi/scan")
-async def scan_wifi():
-    import subprocess
-    import platform
-    
-    wifi_networks = []
-    
-    if platform.system() == "Windows":
-        try:
-            # Run the netsh command to get wifi networks
-            result = subprocess.check_output(["netsh", "wlan", "show", "networks", "mode=bssid"], stderr=subprocess.STDOUT)
-            output = result.decode("utf-8", errors="ignore")
-            
-            current_ssid = None
-            current_bssid = None
-            current_signal = None
-            
-            for line in output.splitlines():
-                line = line.strip()
-                if line.startswith("SSID"):
-                    # Save previous if complete
-                    if current_ssid:
-                        wifi_networks.append({
-                            "ssid": current_ssid,
-                            "bssid": current_bssid,
-                            "signal": current_signal or 0,
-                            "secure": True 
-                        })
-                    current_ssid = line.split(":", 1)[1].strip()
-                    current_bssid = None # Reset
-                    current_signal = None
-                elif line.startswith("Signal"):
-                     try:
-                        current_signal = int(line.split(":", 1)[1].strip().replace("%", ""))
-                     except:
-                        current_signal = 0
-                
-            # Add the last one
-            if current_ssid:
-                wifi_networks.append({
-                    "ssid": current_ssid,
-                    "signal": current_signal or 0,
-                    "secure": True
-                })
-                
-        except Exception as e:
-            print(f"Error scanning wifi: {e}")
-            # Fallback mock if scan fails
-            return [
-                {"ssid": "ClassLink_Teacher", "signal": 90, "secure": True},
-                {"ssid": "School_Guest", "signal": 60, "secure": False}
-            ]
-    else:
-        # Mock for non-windows
-        return [
-             {"ssid": "ClassLink_Teacher", "signal": 90, "secure": True},
-             {"ssid": "School_Guest", "signal": 60, "secure": False}
-        ]
+# WiFi routes moved to routes/setup_wifi.py
+# Chat routes below
 
-    # Deduplicate by SSID
-    unique_networks = {}
-    for net in wifi_networks:
-        if net["ssid"] and net["ssid"] not in unique_networks:
-             unique_networks[net["ssid"]] = net
-    
-    return list(unique_networks.values())
-    
 @app.post("/api/chat/send")
 async def send_chat(data: dict):
     """Teacher sending message to AI"""
@@ -136,14 +78,7 @@ async def get_chat_history():
     """Get recent chat logs (organized by session)"""
     return mqtt_service.sessions
 
-@app.post("/api/wifi/connect")
-async def connect_wifi(data: dict):
-    ssid = data.get("ssid")
-    password = data.get("password")
-    print(f"[WiFi] Simulating connection to {ssid} with password {'*' * len(password) if password else 'OPEN'}")
-    # Initialize connection simulation
-    await asyncio.sleep(2) # Simulate delay
-    return {"status": "success", "message": f"Connected to {ssid}"}
+# WiFi connect route moved to routes/setup_wifi.py
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
