@@ -1,0 +1,42 @@
+# Raspberry Pi Configuration Template
+# 
+# INSTRUCTIONS:
+# 1. Copy this file to 'config.local.yaml' in the same directory
+# 2. Edit the values below with your actual settings
+# 3. config.local.yaml is ignored by git
+
+# MQTT Broker
+mqtt:
+  host: "test.mosquitto.org"
+  port: 1883
+  username: ""          # Leave empty if no auth
+  password: ""
+
+# WiFi Access Point (for setup mode)
+wifi_ap:
+  ssid: "ClassLink-Setup"
+  password: "classlink2024"
+
+# PC Services
+pc_services:
+  stt_host: "192.168.1.100"
+  stt_port: 12345
+  ai_host: "192.168.1.100"
+  ai_api_port: 8080
+
+# Web Dashboard
+web:
+  host: "0.0.0.0"
+  port: 8000
+  debug: false
+
+# Audio Settings
+audio:
+  sample_rate: 16000
+  buffer_size: 512
+  channels: 1
+
+# Logging
+logging:
+  level: "INFO"         # DEBUG, INFO, WARNING, ERROR
+  file: "/var/log/classlink.log"

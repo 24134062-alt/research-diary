@@ -128,6 +128,9 @@ let pollingInterval = null;
 function openChatModal() {
     document.getElementById('chat-modal').classList.add('active');
     isChatOpen = true;
+    // Clear notification badge
+    const badge = document.getElementById('chat-badge');
+    if (badge) badge.style.display = 'none';
     fetchChatHistory();
     if (!pollingInterval) {
         pollingInterval = setInterval(fetchChatHistory, 2000);
@@ -148,12 +151,35 @@ async function fetchChatHistory() {
     try {
         const response = await fetch(`${API_URL}/api/chat/history`);
         const sessions = await response.json();
+
+        // Count new messages for badge
+        let totalMessages = 0;
+        Object.values(sessions).forEach(msgs => {
+            totalMessages += msgs.filter(m => m.sender === 'student' || m.sender === 'student_log').length;
+        });
+        updateChatBadge(totalMessages);
+
         chatSessions = sessions;
         renderSessions();
         renderChat(currentSessionId);
     } catch (error) {
         // console.error("Error fetching chat:", error);
     }
+}
+
+// Update notification badge
+let lastMessageCount = 0;
+function updateChatBadge(count) {
+    const badge = document.getElementById('chat-badge');
+    if (!badge) return;
+
+    // Show badge only when there are new messages and modal is closed
+    if (count > lastMessageCount && !isChatOpen) {
+        const newCount = count - lastMessageCount;
+        badge.textContent = newCount > 99 ? '99+' : newCount;
+        badge.style.display = 'block';
+    }
+    lastMessageCount = count;
 }
 
 function renderSessions() {
@@ -271,6 +297,42 @@ function fillChat(prefix, content) {
 function scrollToBottom() {
     const container = document.getElementById('chat-history');
     if (container) container.scrollTop = container.scrollHeight;
+}
+
+// --- Mic Remote Transcription ---
+function clearMicTranscription() {
+    const area = document.getElementById('mic-transcription-area');
+    if (area) {
+        area.innerHTML = '<p style="color: #71717a; text-align: center;">Chưa có dữ liệu thu âm<\/p>';
+    }
+    showToast('Đã xóa lịch sử thu âm', 'success');
+}
+
+function addMicTranscription(text, timestamp) {
+    const area = document.getElementById('mic-transcription-area');
+    if (!area) return;
+
+    // Clear empty state if present
+    if (area.querySelector('p[style*="text-align: center"]')) {
+        area.innerHTML = '';
+    }
+
+    const entry = document.createElement('div');
+    entry.className = 'transcription-entry';
+    entry.style.cssText = 'margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid #1f1f23;';
+    entry.innerHTML = `
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+            <span style="color: #71717a; font-size: 0.75rem;">${timestamp || new Date().toLocaleTimeString()}<\/span>
+        <\/div>
+        <p style="margin: 0; color: #e4e4e7;">"${text}"<\/p>
+        <div style="margin-top: 6px;">
+            <span style="background: rgba(59, 130, 246, 0.15); color: #60a5fa; padding: 2px 8px; border-radius: 4px; font-size: 0.7rem;">
+                <i class="fas fa-volume-up"><\/i> Broadcast TTS
+            <\/span>
+        <\/div>
+    `;
+    area.appendChild(entry);
+    area.scrollTop = area.scrollHeight;
 }
 
 // --- WiFi Management ---

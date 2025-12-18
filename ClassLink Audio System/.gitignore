@@ -1,0 +1,43 @@
+# ClassLink Audio System - Git Ignore
+
+# Configuration files with secrets
+**/config.h
+**/config.local.yaml
+**/config.local.json
+**/.env
+**/.env.local
+
+# PlatformIO build artifacts
+.pio/
+.pioenvs/
+.piolibdeps/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+*.tmp
+*.bak
