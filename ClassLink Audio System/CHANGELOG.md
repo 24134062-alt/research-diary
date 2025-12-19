@@ -2,6 +2,45 @@
 
 All notable changes to ClassLink Audio System will be documented in this file.
 
+## [2024-12-20] - Raspberry Pi Setup Scripts & WiFi Features
+
+### SCRIPTS ĐÃ TẠO (trong `box/raspberry/`)
+
+| Script | Chức năng | Trạng thái |
+|--------|-----------|------------|
+| `setup-hostname.sh` | Đổi tên thành `classlink.local` | ⚠️ Cần chạy |
+| `setup-wifi-ap.sh` | Raspberry phát WiFi "ClassLink-Setup" | ⚠️ Cần chạy |
+| `setup-autostart.sh` | Web server tự chạy khi bật điện | ⚠️ Cần chạy |
+
+### HƯỚNG DẪN CHẠY (trên Raspberry Pi)
+
+```bash
+cd "/home/pi/research-diary/ClassLink Audio System/box/raspberry"
+sudo bash setup-hostname.sh
+sudo bash setup-wifi-ap.sh
+sudo bash setup-autostart.sh
+sudo reboot
+```
+
+Sau khi reboot:
+1. Quét WiFi → Thấy **"ClassLink-Setup"** (pass: `classlink2024`)
+2. Kết nối WiFi đó
+3. Mở trình duyệt: **http://classlink.local:8000**
+
+### Added
+- **WiFi Connected API**: `GET /api/wifi/connected` - Lấy WiFi đang kết nối
+- **Connected WiFi Badge**: UI hiển thị nút xanh "✅ Đã kết nối" cho mạng đang dùng
+- **Auto-Start Service**: `classlink-web.service` - Web server tự chạy khi bật điện
+
+### Fixed
+- **Python Import Paths**: Sửa relative imports trong `main.py`
+- **Added `__init__.py`**: Biến app folder thành Python package
+
+### VẤN ĐỀ ĐANG GẶP
+- AP mode chạy nhưng SSH/Web qua 192.168.4.1 bị timeout
+- Cần kết nối màn hình HDMI + bàn phím để debug
+- Hoặc quay lại WiFi TP-Link để truy cập qua 192.168.0.107:8000
+
 ## [2024-12-19] - ESP32 Box & System Configuration
 
 ### TÓM TẮT KIẾN TRÚC HỆ THỐNG
