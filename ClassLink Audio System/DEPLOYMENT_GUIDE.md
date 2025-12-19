@@ -91,7 +91,7 @@ ClassLink Audio System là hệ thống quản lý âm thanh thông minh cho l�
 2. **Kết nối lại** WiFi chính (WiFi mà bạn vừa cấu hình cho Raspberry Pi)
 3. **Truy cập dashboard** bằng:
    ```
-   http://raspberrypi.local:8000
+   http://classlink.local:8000
    ```
    
    Hoặc nếu không được, tìm IP của Raspberry Pi trên router
@@ -129,7 +129,7 @@ Sau khi truy cập web thành công, bạn sẽ thấy:
 **Giải pháp:**
 1. Kiểm tra Raspberry Pi đã bật và LED nhấp nháy
 2. Kiểm tra máy tính và Raspberry Pi cùng mạng WiFi
-3. Thử truy cập bằng IP thay vì `raspberrypi.local`
+3. Thử truy cập bằng IP thay vì `classlink.local`
 4. Kiểm tra service: `sudo systemctl status classlink-web`
 
 ---

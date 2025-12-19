@@ -20,61 +20,64 @@
 // ====== Buffer ======
 static String rx_buffer;
 
+// ====== Forward declarations ======
+void handle_uart_line(const String &line);
+
 // ====== Public API ======
 void uart_ctrl_init() {
-    Serial.println("[UART] Init UART control");
-    rx_buffer.reserve(256);
+  Serial.println("[UART] Init UART control");
+  rx_buffer.reserve(256);
 }
 
 void uart_ctrl_loop() {
-    // Đọc UART không block
-    while (Serial.available()) {
-        char c = Serial.read();
+  // Đọc UART không block
+  while (Serial.available()) {
+    char c = Serial.read();
 
-        if (c == '\n') {
-            handle_uart_line(rx_buffer);
-            rx_buffer = "";
-        } else {
-            rx_buffer += c;
-        }
+    if (c == '\n') {
+      handle_uart_line(rx_buffer);
+      rx_buffer = "";
+    } else {
+      rx_buffer += c;
     }
+  }
 }
 
 // ====== Internal logic ======
-void handle_uart_line(const String& line) {
-    if (line.length() == 0) return;
+void handle_uart_line(const String &line) {
+  if (line.length() == 0)
+    return;
 
-    Serial.print("[UART][RX] ");
-    Serial.println(line);
+  Serial.print("[UART][RX] ");
+  Serial.println(line);
 
-    // MVP: parse MODE_SET thủ công
-    if (line.indexOf("\"type\":\"MODE_SET\"") >= 0) {
-        if (line.indexOf("\"mode\":\"CLASS\"") >= 0) {
-            Serial.println("[UART] MODE -> CLASS");
-            // TODO: notify gateway / glasses
-        } else if (line.indexOf("\"mode\":\"PRIVATE\"") >= 0) {
-            Serial.println("[UART] MODE -> PRIVATE");
-            // TODO: notify gateway / glasses
-        }
+  // MVP: parse MODE_SET thủ công
+  if (line.indexOf("\"type\":\"MODE_SET\"") >= 0) {
+    if (line.indexOf("\"mode\":\"CLASS\"") >= 0) {
+      Serial.println("[UART] MODE -> CLASS");
+      // TODO: notify gateway / glasses
+    } else if (line.indexOf("\"mode\":\"PRIVATE\"") >= 0) {
+      Serial.println("[UART] MODE -> PRIVATE");
+      // TODO: notify gateway / glasses
     }
+  }
 }
 
 // ====== Event send API (ESP32 -> Raspberry) ======
 void uart_send_dev_join(int total) {
-    String msg = "{";
-    msg += "\"type\":\"DEV_JOIN\",";
-    msg += "\"total\":" + String(total);
-    msg += "}\n";
+  String msg = "{";
+  msg += "\"type\":\"DEV_JOIN\",";
+  msg += "\"total\":" + String(total);
+  msg += "}\n";
 
-    Serial.print(msg);
+  Serial.print(msg);
 }
 
 void uart_send_dev_leave(int total) {
-    String msg = "{";
-    msg += "\"type\":\"DEV_LEAVE\",";
-    msg += "\"total\":" + String(total);
-    msg += "}\n";
+  String msg = "{";
+  msg += "\"type\":\"DEV_LEAVE\",";
+  msg += "\"total\":" + String(total);
+  msg += "}\n";
 
-    Serial.print(msg);
+  Serial.print(msg);
 }
-
