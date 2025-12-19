@@ -4,10 +4,10 @@ from fastapi.responses import FileResponse
 import uvicorn
 import asyncio
 from pathlib import Path
-from services.mqtt import MQTTService
-from services.wifi_monitor import WiFiMonitor
-from services.hotspot import HotspotController
-from routes import health, setup_wifi, stt, wifi_manager, system
+from .services.mqtt import MQTTService
+from .services.wifi_monitor import WiFiMonitor
+from .services.hotspot import HotspotController
+from .routes import health, setup_wifi, stt, wifi_manager, system
 
 app = FastAPI()
 mqtt_service = MQTTService()
