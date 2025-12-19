@@ -10,6 +10,33 @@ import asyncio
 
 router = APIRouter()
 
+@router.get("/connected")
+async def get_connected_wifi():
+    """Get currently connected WiFi network"""
+    if platform.system() == "Linux":
+        try:
+            # Get current connection using nmcli
+            result = subprocess.check_output(
+                ["nmcli", "-t", "-f", "ACTIVE,SSID", "device", "wifi"],
+                stderr=subprocess.STDOUT,
+                timeout=5
+            )
+            output = result.decode("utf-8", errors="ignore")
+            
+            for line in output.splitlines():
+                parts = line.split(":")
+                if len(parts) >= 2 and parts[0] == "yes":
+                    return {"connected": True, "ssid": parts[1]}
+            
+            return {"connected": False, "ssid": None}
+            
+        except Exception as e:
+            print(f"[WiFi] Error getting connected network: {e}")
+            return {"connected": False, "ssid": None, "error": str(e)}
+    else:
+        # Windows demo
+        return {"connected": True, "ssid": "Demo_Network"}
+
 @router.get("/scan")
 async def scan_wifi():
     """Scan available WiFi networks"""

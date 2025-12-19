@@ -336,6 +336,8 @@ function addMicTranscription(text, timestamp) {
 }
 
 // --- WiFi Management ---
+let currentConnectedSSID = null;
+
 async function scanWiFi() {
     const button = document.querySelector('[onclick="scanWiFi()"]');
     const container = document.getElementById('wifi-list');
@@ -345,6 +347,12 @@ async function scanWiFi() {
     if (button) button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Đang quét...';
 
     try {
+        // Get connected WiFi first
+        const connRes = await fetch(`${API_URL}/api/wifi/connected`);
+        const connData = await connRes.json();
+        currentConnectedSSID = connData.connected ? connData.ssid : null;
+
+        // Then scan networks
         const res = await fetch(`${API_URL}/api/wifi/scan`);
         const networks = await res.json();
         renderWiFiNetworks(networks);
@@ -392,19 +400,26 @@ function renderWiFiNetworks(networks) {
         return html;
     }
 
-    container.innerHTML = networks.map(network => `
-        <div class="wifi-item" onclick="connectToWiFi('${network.ssid}', ${network.secure})">
+    container.innerHTML = networks.map(network => {
+        const isConnected = currentConnectedSSID && network.ssid === currentConnectedSSID;
+        const buttonClass = isConnected ? 'btn-sm btn-connected' : 'btn-sm';
+        const buttonText = isConnected ? '✅ Đã kết nối' : 'Kết nối';
+        const buttonStyle = isConnected ? 'background: #22c55e; cursor: default;' : '';
+        const onclick = isConnected ? '' : `onclick="connectToWiFi('${network.ssid}', ${network.secure})"`;
+
+        return `
+        <div class="wifi-item" ${onclick}>
             <div class="wifi-info">
-                <h4>${getSignalIcon(network.signal)} ${network.ssid}</h4>
+                <h4>${getSignalIcon(network.signal)} ${network.ssid} ${isConnected ? '<span style="color: #22c55e; font-size: 0.8em;">(Đang dùng)</span>' : ''}</h4>
                 <small>
                     ${getSignalBars(network.signal)}
                     <span style="margin-left: 8px;">Signal: ${network.signal}%</span>
                     ${network.secure ? '🔒 Secured' : '🔓 Open'}
                 </small>
             </div>
-            <button class="btn-sm">Kết nối</button>
+            <button class="${buttonClass}" style="${buttonStyle}" ${isConnected ? 'disabled' : ''}>${buttonText}</button>
         </div>
-    `).join('');
+    `}).join('');
 }
 
 function connectToWiFi(ssid, isSecure) {
