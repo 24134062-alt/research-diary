@@ -49,6 +49,18 @@ All notable changes to ClassLink Audio System will be documented in this file.
 | Glasses/Mic | Thu audio, hiển thị text | WiFi vào ESP32 AP |
 | Teacher PC | STT + AI Processing | Cùng mạng với Raspberry |
 
+### HAI MẠNG WIFI KHÁC NHAU
+
+| | **ESP32 Box** | **Raspberry Pi** |
+|---|---|---|
+| **Tên mạng** | `CLASS-BOX` | `ClassLink-Setup` |
+| **Mật khẩu** | `12345678` | `classlink2024` |
+| **Mục đích** | Cho **Kính/Mic** kết nối | Cho **Giáo viên** cấu hình |
+| **Khi nào hoạt động** | **Luôn bật** | **Chỉ lúc ban đầu** (sau đó tắt) |
+| **Thiết bị kết nối** | Glasses, Mic Remote | Laptop/Điện thoại giáo viên |
+
+> ⚠️ **Lưu ý**: Hai mạng hoạt động **độc lập**, không liên quan đến nhau!
+
 ### Mật khẩu Admin
 - **Code update**: `admin123` (file: `box/raspberry/api/app/routes/system.py`)
 - **WiFi AP Raspberry**: `classlink2024` (file: `box/raspberry/config.example.yaml`)
