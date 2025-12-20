@@ -6,6 +6,7 @@
 **/config.local.json
 **/.env
 **/.env.local
+**/config.env
 
 # PlatformIO build artifacts
 .pio/
