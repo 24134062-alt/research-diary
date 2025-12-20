@@ -324,6 +324,56 @@
                         </small>
                     </div>
                 </div>
+
+                <!-- PC AI Service Setup Panel -->
+                <div class="panel" style="margin-top: 20px; border: 1px solid #8b5cf6;">
+                    <div class="panel-header" style="margin-bottom: 16px;">
+                        <h2 style="color: #8b5cf6;"><i class="fas fa-desktop"></i> Cài Đặt PC AI Service</h2>
+                        <div id="pc-status"
+                            style="display: flex; align-items: center; gap: 8px; padding: 6px 12px; background: rgba(239, 68, 68, 0.2); border-radius: 20px; font-size: 0.8rem;">
+                            <span style="width: 8px; height: 8px; background: #ef4444; border-radius: 50%;"></span>
+                            <span style="color: #fca5a5;">Chưa cài đặt</span>
+                        </div>
+                    </div>
+
+                    <p style="color: var(--text-secondary); margin-bottom: 16px;">
+                        AI Service chạy trên PC để xử lý giọng nói và trả lời câu hỏi. Chỉ cần cài đặt 1 lần.
+                    </p>
+
+                    <div style="display: flex; gap: 12px; flex-wrap: wrap; align-items: center;">
+                        <button class="btn-primary" onclick="downloadPCInstaller()"
+                            style="background: linear-gradient(135deg, #8b5cf6, #6366f1);">
+                            <i class="fas fa-download"></i> Tải Installer cho PC
+                        </button>
+                        <button class="btn-secondary" onclick="checkPCStatus()">
+                            <i class="fas fa-sync-alt"></i> Kiểm tra kết nối
+                        </button>
+                    </div>
+
+                    <!-- Loading indicator (hidden by default) -->
+                    <div id="pc-loading"
+                        style="display: none; margin-top: 16px; padding: 16px; background: rgba(139, 92, 246, 0.1); border-radius: 8px;">
+                        <div style="display: flex; align-items: center; gap: 12px;">
+                            <div class="spinner"
+                                style="width: 24px; height: 24px; border: 3px solid #3f3f46; border-top-color: #8b5cf6; border-radius: 50%; animation: spin 1s linear infinite;">
+                            </div>
+                            <div>
+                                <div style="color: white; font-weight: 500;">Đang kiểm tra kết nối PC...</div>
+                                <div id="pc-loading-status" style="color: #a1a1aa; font-size: 0.85rem;">Vui lòng đợi
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div
+                        style="margin-top: 16px; padding: 12px; background: rgba(59, 130, 246, 0.1); border-left: 3px solid #3b82f6; border-radius: 4px;">
+                        <small style="color: #93c5fd;">
+                            <i class="fas fa-info-circle"></i> <strong>Hướng dẫn:</strong> Tải file, chạy install.bat,
+                            chờ cài xong.
+                            PC sẽ tự động kết nối với Box khi bật máy.
+                        </small>
+                    </div>
+                </div>
             </section>
 
         </main>

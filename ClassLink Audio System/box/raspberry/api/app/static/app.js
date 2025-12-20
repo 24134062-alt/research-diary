@@ -691,3 +691,87 @@ setInterval(() => {
 }, 2000);
 
 fetchDevices();
+
+// ===== PC AI SERVICE FUNCTIONS =====
+
+// Download PC installer
+function downloadPCInstaller() {
+    showToast('📥 Đang tải installer...', 'info');
+
+    // Create download link for installer package
+    const link = document.createElement('a');
+    link.href = '/api/system/pc-installer';
+    link.download = 'ClassLink-PC-Installer.zip';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    showToast('✅ Tải xong! Giải nén và chạy install.bat', 'success');
+}
+
+// Check PC service status
+async function checkPCStatus() {
+    const statusEl = document.getElementById('pc-status');
+    const loadingEl = document.getElementById('pc-loading');
+    const loadingStatus = document.getElementById('pc-loading-status');
+
+    // Show loading
+    loadingEl.style.display = 'block';
+    loadingStatus.textContent = 'Đang kết nối tới PC Service...';
+
+    try {
+        // Try to ping PC service via MQTT broker
+        const res = await fetch(`${API_URL}/api/system/pc-status`, {
+            method: 'GET',
+            timeout: 5000
+        });
+
+        if (res.ok) {
+            const data = await res.json();
+
+            if (data.connected) {
+                // Update status to connected
+                statusEl.innerHTML = `
+                    <span style="width: 8px; height: 8px; background: #22c55e; border-radius: 50%;"></span>
+                    <span style="color: #86efac;">Đã kết nối</span>
+                `;
+                statusEl.style.background = 'rgba(34, 197, 94, 0.2)';
+                loadingStatus.textContent = 'PC Service đang chạy!';
+                showToast('✅ PC AI Service đã kết nối!', 'success');
+            } else {
+                // Not connected
+                statusEl.innerHTML = `
+                    <span style="width: 8px; height: 8px; background: #f59e0b; border-radius: 50%;"></span>
+                    <span style="color: #fcd34d;">Chờ kết nối</span>
+                `;
+                statusEl.style.background = 'rgba(245, 158, 11, 0.2)';
+                loadingStatus.textContent = 'PC Service chưa kết nối. Hãy chạy installer!';
+                showToast('⚠️ PC chưa kết nối. Chạy install.bat trên PC!', 'info');
+            }
+        } else {
+            throw new Error('Server error');
+        }
+    } catch (e) {
+        // Error or not installed
+        statusEl.innerHTML = `
+            <span style="width: 8px; height: 8px; background: #ef4444; border-radius: 50%;"></span>
+            <span style="color: #fca5a5;">Chưa cài đặt</span>
+        `;
+        statusEl.style.background = 'rgba(239, 68, 68, 0.2)';
+        loadingStatus.textContent = 'Không thể kết nối. Hãy tải và cài installer!';
+    }
+
+    // Hide loading after 2 seconds
+    setTimeout(() => {
+        loadingEl.style.display = 'none';
+    }, 2000);
+}
+
+// CSS for spinner animation
+const spinnerStyle = document.createElement('style');
+spinnerStyle.textContent = `
+    @keyframes spin {
+        to { transform: rotate(360deg); }
+    }
+`;
+document.head.appendChild(spinnerStyle);

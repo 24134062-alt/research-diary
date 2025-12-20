@@ -130,3 +130,79 @@ async def get_system_info():
             "branch": "error",
             "last_commit": str(e)
         }
+
+
+@router.get("/pc-installer")
+async def download_pc_installer():
+    """Download PC AI Service installer as ZIP"""
+    try:
+        # Get installer directory (relative to project structure)
+        # box/raspberry/api -> go up 4 levels to ClassLink Audio System, then pc/installer
+        base_dir = Path(__file__).resolve().parent.parent.parent.parent.parent
+        installer_dir = base_dir / "pc" / "installer"
+        
+        if not installer_dir.exists():
+            raise HTTPException(status_code=404, detail="Installer directory not found")
+        
+        # Create ZIP in memory
+        zip_buffer = io.BytesIO()
+        
+        with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+            # Add installer files
+            for file in installer_dir.glob("*"):
+                if file.is_file():
+                    arcname = f"ClassLink-PC-Installer/{file.name}"
+                    zip_file.write(file, arcname)
+            
+            # Add README
+            readme_content = """ClassLink PC AI Service Installer
+====================================
+
+HƯỚNG DẪN CÀI ĐẶT:
+
+1. Giải nén thư mục này
+2. Mở file config.template.env và thay YOUR_API_KEY_HERE bằng API key Gemini của bạn
+3. Đổi tên config.template.env thành config.env
+4. Chạy file install.bat (nhấp đúp chuột)
+5. Chờ cài đặt hoàn tất
+
+Sau khi cài xong, PC AI Service sẽ tự động chạy mỗi khi bật máy!
+
+Để lấy API Key Gemini miễn phí:
+https://aistudio.google.com/app/apikey
+"""
+            zip_file.writestr("ClassLink-PC-Installer/README.txt", readme_content)
+        
+        zip_buffer.seek(0)
+        
+        return StreamingResponse(
+            zip_buffer,
+            media_type="application/zip",
+            headers={
+                "Content-Disposition": "attachment; filename=ClassLink-PC-Installer.zip"
+            }
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to create installer ZIP: {str(e)}")
+
+
+@router.get("/pc-status")
+async def check_pc_status():
+    """Check if PC AI Service is connected (via MQTT if available)"""
+    # For now, return a simple status
+    # In production, this would check MQTT connection state
+    try:
+        # Try to import mqtt service if available
+        # This is a placeholder - actual implementation would check MQTT topic
+        return {
+            "connected": False,
+            "message": "PC Service status check. Run installer on PC to connect."
+        }
+    except Exception as e:
+        return {
+            "connected": False,
+            "error": str(e)
+        }

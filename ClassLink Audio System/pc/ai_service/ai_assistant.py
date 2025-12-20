@@ -1,11 +1,18 @@
 import os
-import google.generativeai as genai
+from google import genai
 from typing import List, Optional, Dict
 import logging
 import re
+from pathlib import Path
+from dotenv import load_dotenv
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Load config.env
+config_path = Path(__file__).parent / "config.env"
+if config_path.exists():
+    load_dotenv(config_path)
 
 class AITeachingAssistant:
     """
@@ -24,15 +31,16 @@ class AITeachingAssistant:
         if not self.api_key:
             raise ValueError("Gemini API key not provided. Set GEMINI_API_KEY environment variable.")
         
-        genai.configure(api_key=self.api_key)
-        self.model = genai.GenerativeModel('gemini-pro')
+        # New google-genai package
+        self.client = genai.Client(api_key=self.api_key)
+        self.model_name = "gemini-2.5-flash"  # Free tier, fast
         
         # Context storage
         self.lecture_content = ""
         self.teacher_transcript = []
         self.grade_level = "trung học"
         
-        logger.info("AI Teaching Assistant initialized with Gemini Pro")
+        logger.info(f"AI Teaching Assistant initialized with {self.model_name}")
     
     def load_lecture(self, content: str):
         """Load lecture content into AI context."""
@@ -72,30 +80,32 @@ class AITeachingAssistant:
         recent_transcript = self.get_recent_transcript()
         
         prompt = f"""
-Bạn là trợ giảng Việt Nam thông minh, hỗ trợ học sinh {self.grade_level}.
+Ban la tro giang Viet Nam thong minh, ho tro hoc sinh {self.grade_level}.
 
-📚 BÀI GIẢNG HÔM NAY:
-{self.lecture_content if self.lecture_content else "Chưa có tài liệu bài giảng được upload."}
+BAI GIANG HOM NAY:
+{self.lecture_content if self.lecture_content else "Chua co tai lieu bai giang."}
 
-🎤 GIÁO VIÊN VỪA GIẢNG (10 phút gần nhất):
-{recent_transcript if recent_transcript else "Chưa có transcript."}
+GIAO VIEN VUA GIANG (10 phut gan nhat):
+{recent_transcript if recent_transcript else "Chua co transcript."}
 
-❓ HỌC SINH HỎI:
+HOC SINH HOI:
 {question}
 
-HƯỚNG DẪN TRẢ LỜI:
-- CỰC KỲ NGẮN GỌN: tối đa 40 từ (hiển thị trên màn hình nhỏ OLED 128x64px)
-- Ưu tiên câu trả lời trực tiếp, bỏ lời mở đầu kiểu "Theo như bài giảng..."
-- Dùng số/ký hiệu thay chữ khi được (vd: "2+2=4" thay "hai cộng hai bằng bốn")
-- Nếu liên quan đến bài giảng, dẫn chiếu cụ thể
-- Nếu câu hỏi ngoài phạm vi bài giảng, trả lời: "Câu hỏi này em nên hỏi giáo viên nhé!"
+HUONG DAN TRA LOI:
+- CUC KY NGAN GON: toi da 40 tu
+- Uu tien cau tra loi truc tiep
+- Dung so/ky hieu thay chu khi duoc (vd: "2+2=4")
+- Neu cau hoi ngoai pham vi bai giang, tra loi: "Cau hoi nay em nen hoi giao vien nhe!"
 
-TRẢ LỜI (chỉ nội dung, không giải thích):
+TRA LOI (chi noi dung, khong giai thich):
 """
         
         try:
-            # Call Gemini API
-            response = self.model.generate_content(prompt)
+            # Call Gemini API with new package
+            response = self.client.models.generate_content(
+                model=self.model_name,
+                contents=prompt
+            )
             answer = response.text.strip()
             
             # Enforce length limit (fallback safety)
@@ -108,7 +118,7 @@ TRẢ LỜI (chỉ nội dung, không giải thích):
             
         except Exception as e:
             logger.error(f"Gemini API error: {e}")
-            return "Xin lỗi em, AI đang bận. Hãy hỏi giáo viên nhé!"
+            return "Xin loi em, AI dang ban. Hay hoi giao vien nhe!"
     
     def detect_visual_aids(self, question: str) -> Dict[str, any]:
         """
@@ -122,24 +132,24 @@ TRẢ LỜI (chỉ nội dung, không giải thích):
         # Shape keywords mapping
         shape_keywords = {
             # 2D Shapes
-            r'(hình\s+)?vuông|square': {'type': 'shape', 'param': 'square'},
-            r'(hình\s+)?tròn|circle': {'type': 'shape', 'param': 'circle'},
+            r'(hinh\s+)?vuong|square': {'type': 'shape', 'param': 'square'},
+            r'(hinh\s+)?tron|circle': {'type': 'shape', 'param': 'circle'},
 
             # 3D Shapes
-            r'(hình\s+)?lập\s+phương|hình\s+khối\s+vuông|cube': {'type': 'shape', 'param': 'cube'},
-            r'(hình\s+)?chóp|pyramid': {'type': 'shape', 'param': 'pyramid'},
-            r'(hình\s+)?cầu|sphere|quả\s+cầu': {'type': 'shape', 'param': 'sphere'},
-            r'(hình\s+)?trụ|cylinder': {'type': 'shape', 'param': 'cylinder'},
-            r'(hình\s+)?nón|cone': {'type': 'shape', 'param': 'cone'},
-            r'hình\s+hộp|rectangular\s+prism': {'type': 'shape', 'param': 'prism'},
+            r'(hinh\s+)?lap\s+phuong|hinh\s+khoi\s+vuong|cube': {'type': 'shape', 'param': 'cube'},
+            r'(hinh\s+)?chop|pyramid': {'type': 'shape', 'param': 'pyramid'},
+            r'(hinh\s+)?cau|sphere|qua\s+cau': {'type': 'shape', 'param': 'sphere'},
+            r'(hinh\s+)?tru|cylinder': {'type': 'shape', 'param': 'cylinder'},
+            r'(hinh\s+)?non|cone': {'type': 'shape', 'param': 'cone'},
+            r'hinh\s+hop|rectangular\s+prism': {'type': 'shape', 'param': 'prism'},
             
             # Molecules
-            r'h2o|nước|phân\s+tử\s+nước|water': {'type': 'molecule', 'param': 'h2o'},
-            r'co2|cacbon\s+dioxide|khí\s+cacbonic': {'type': 'molecule', 'param': 'co2'},
+            r'h2o|nuoc|phan\s+tu\s+nuoc|water': {'type': 'molecule', 'param': 'h2o'},
+            r'co2|cacbon\s+dioxide|khi\s+cacbonic': {'type': 'molecule', 'param': 'co2'},
             r'ch4|metan|methane': {'type': 'molecule', 'param': 'ch4'},
             
             # Coordinate system
-            r'hệ\s+trục|trục\s+tọa\s+độ|coordinate': {'type': 'coordinate', 'param': 'xyz'},
+            r'he\s+truc|truc\s+toa\s+do|coordinate': {'type': 'coordinate', 'param': 'xyz'},
         }
         
         for pattern, visual_info in shape_keywords.items():
@@ -187,21 +197,25 @@ TRẢ LỜI (chỉ nội dung, không giải thích):
 
 # Quick test
 if __name__ == "__main__":
-    # Example usage
+    import sys
+    if sys.platform == 'win32':
+        import io
+        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+    
     ai = AITeachingAssistant()
     
     # Load sample lecture
     ai.load_lecture("""
-    Bài 5: Phương trình bậc nhất
-    Phương trình bậc nhất có dạng: ax + b = 0
-    Nghiệm: x = -b/a (với a khác 0)
-    Ví dụ: 2x + 4 = 0 => x = -4/2 = -2
+    Bai 5: Phuong trinh bac nhat
+    Phuong trinh bac nhat co dang: ax + b = 0
+    Nghiem: x = -b/a (voi a khac 0)
+    Vi du: 2x + 4 = 0 => x = -4/2 = -2
     """)
     
     # Add teacher speech
-    ai.add_teacher_speech("Chú ý các em, phương trình bậc nhất rất quan trọng")
-    ai.add_teacher_speech("Để giải phương trình, ta cần chuyển vế và rút gọn")
+    ai.add_teacher_speech("Chu y cac em, phuong trinh bac nhat rat quan trong")
+    ai.add_teacher_speech("De giai phuong trinh, ta can chuyen ve va rut gon")
     
     # Ask question
-    answer = ai.ask_question("Em không hiểu cách giải phương trình 3x + 6 = 0")
+    answer = ai.ask_question("Em khong hieu cach giai phuong trinh 3x + 6 = 0")
     print(f"AI: {answer}")
