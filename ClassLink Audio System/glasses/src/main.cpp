@@ -20,7 +20,6 @@
 #include <Wire.h>
 #include <driver/i2s.h>
 
-
 // ====== WiFi Config - Kết nối tới ESP32 Box ======
 const char *WIFI_SSID = "CLASS-BOX";
 const char *WIFI_PASS = "12345678";
@@ -35,7 +34,7 @@ const int AUDIO_PORT = 12345;
 
 // ====== I2S Microphone Pins ======
 #define I2S_WS 25
-#define I2S_SD 33
+#define I2S_SD 34 // Đổi từ 33 sang 34 để tránh xung đột với nút
 #define I2S_SCK 26
 #define I2S_PORT I2S_NUM_0
 #define SAMPLE_RATE 16000
@@ -43,13 +42,7 @@ const int AUDIO_PORT = 12345;
 
 // ====== Button Pins (Nhấn-thả) ======
 #define BTN_MODE_PIN 32 // Nút 1: Toggle Class ↔ Private
-#define BTN_AI_PIN                                                             \
-  33 // Nút 2: Toggle AI Trợ Giảng (THAY ĐỔI THÀNH 27 VÌ 33 DÙNG CHO I2S)
-
-// NOTE: GPIO 33 đang dùng cho I2S_SD, cần đổi 1 trong 2
-// Đề xuất: Đổi BTN_AI_PIN sang GPIO 27 hoặc GPIO 14
-#undef BTN_AI_PIN
-#define BTN_AI_PIN 27 // Đổi sang GPIO 27 để tránh xung đột
+#define BTN_AI_PIN 33   // Nút 2: Toggle AI Trợ Giảng
 
 // ====== OLED Config ======
 #define SCREEN_WIDTH 128
