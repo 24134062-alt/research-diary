@@ -794,3 +794,92 @@ spinnerStyle.textContent = `
     }
 `;
 document.head.appendChild(spinnerStyle);
+
+// ===== DEBUG TERMINAL FUNCTIONS =====
+
+// Store admin password for session
+let adminPassword = null;
+
+// Set command in input field
+function setCommand(cmd) {
+    document.getElementById('cmd-input').value = cmd;
+    document.getElementById('cmd-input').focus();
+}
+
+// Run debug command
+async function runDebugCommand() {
+    const cmdInput = document.getElementById('cmd-input');
+    const outputEl = document.getElementById('cmd-output');
+    const command = cmdInput.value.trim();
+
+    if (!command) {
+        showToast('Vui lòng nhập lệnh!', 'error');
+        return;
+    }
+
+    // Ask for password if not stored
+    if (!adminPassword) {
+        adminPassword = prompt('Nhập mật khẩu admin để chạy lệnh:');
+        if (!adminPassword) return;
+    }
+
+    // Show loading
+    outputEl.innerHTML = `<span style="color: #f59e0b;">$ ${command}</span>\n<span style="color: #71717a;">Đang thực thi...</span>`;
+
+    try {
+        const res = await fetch(`${API_URL}/api/system/run-command`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                password: adminPassword,
+                command: command,
+                timeout: 30
+            })
+        });
+
+        if (res.status === 401) {
+            adminPassword = null;
+            outputEl.innerHTML = `<span style="color: #ef4444;">❌ Mật khẩu không đúng!</span>`;
+            return;
+        }
+
+        if (res.status === 400) {
+            const error = await res.json();
+            outputEl.innerHTML = `<span style="color: #ef4444;">🛡️ ${error.detail}</span>`;
+            return;
+        }
+
+        const result = await res.json();
+
+        // Format output
+        let output = `<span style="color: #f59e0b;">$ ${command}</span>\n`;
+        output += `<span style="color: #71717a;">[cwd: ${result.cwd || 'N/A'}]</span>\n\n`;
+
+        if (result.status === 'success') {
+            if (result.stdout) {
+                output += `<span style="color: #22c55e;">${escapeHtml(result.stdout)}</span>`;
+            } else {
+                output += `<span style="color: #71717a;">(Không có output)</span>`;
+            }
+        } else if (result.status === 'error') {
+            output += `<span style="color: #ef4444;">${escapeHtml(result.stderr || result.message || 'Error')}</span>`;
+        } else if (result.status === 'timeout') {
+            output += `<span style="color: #f59e0b;">⏱️ ${result.message}</span>`;
+        }
+
+        output += `\n\n<span style="color: #71717a;">Exit code: ${result.returncode !== undefined ? result.returncode : 'N/A'}</span>`;
+
+        outputEl.innerHTML = output;
+        outputEl.scrollTop = outputEl.scrollHeight;
+
+    } catch (e) {
+        outputEl.innerHTML = `<span style="color: #ef4444;">❌ Lỗi: ${e.message}</span>`;
+    }
+}
+
+// Escape HTML to prevent XSS
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}

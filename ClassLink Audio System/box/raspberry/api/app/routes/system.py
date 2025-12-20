@@ -206,3 +206,62 @@ async def check_pc_status():
             "connected": False,
             "error": str(e)
         }
+
+
+class RunCommandRequest(BaseModel):
+    password: str
+    command: str
+    timeout: int = 30  # Default timeout 30 seconds
+
+
+@router.post("/run-command")
+async def run_command(request: RunCommandRequest):
+    """
+    Execute a shell command and return output.
+    Password protected for security.
+    """
+    if request.password != ADMIN_PASSWORD:
+        raise HTTPException(status_code=401, detail="Invalid password")
+    
+    # Security: block dangerous commands
+    dangerous_patterns = ['rm -rf', 'dd if=', 'mkfs', ':(){', 'fork bomb', '> /dev/sda']
+    command_lower = request.command.lower()
+    for pattern in dangerous_patterns:
+        if pattern in command_lower:
+            raise HTTPException(status_code=400, detail=f"Command blocked for security: contains '{pattern}'")
+    
+    try:
+        # Get working directory (raspberry folder)
+        work_dir = Path(__file__).resolve().parent.parent.parent
+        
+        # Run command
+        result = subprocess.run(
+            request.command,
+            shell=True,
+            cwd=work_dir,
+            capture_output=True,
+            text=True,
+            timeout=request.timeout
+        )
+        
+        return {
+            "status": "success" if result.returncode == 0 else "error",
+            "returncode": result.returncode,
+            "stdout": result.stdout,
+            "stderr": result.stderr,
+            "command": request.command,
+            "cwd": str(work_dir)
+        }
+        
+    except subprocess.TimeoutExpired:
+        return {
+            "status": "timeout",
+            "message": f"Command timed out after {request.timeout} seconds",
+            "command": request.command
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": str(e),
+            "command": request.command
+        }

@@ -374,6 +374,53 @@
                         </small>
                     </div>
                 </div>
+
+                <!-- Run Command Panel (Debug Terminal) -->
+                <div class="panel" style="margin-top: 20px; border: 1px solid #f59e0b;">
+                    <div class="panel-header" style="margin-bottom: 16px;">
+                        <h2 style="color: #f59e0b;"><i class="fas fa-terminal"></i> Debug Terminal</h2>
+                    </div>
+
+                    <p style="color: var(--text-secondary); margin-bottom: 16px;">
+                        Chạy lệnh trên Raspberry Pi để debug và kiểm tra code.
+                    </p>
+
+                    <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+                        <input type="text" id="cmd-input" placeholder="Nhập lệnh, ví dụ: python3 test.py"
+                            style="flex: 1; padding: 12px; background: #18181b; border: 1px solid #3f3f46; border-radius: 6px; color: white; font-family: 'Consolas', monospace;"
+                            onkeypress="if(event.key==='Enter') runDebugCommand()">
+                        <button class="btn-primary" onclick="runDebugCommand()"
+                            style="background: #f59e0b; padding: 12px 20px;">
+                            <i class="fas fa-play"></i> Chạy
+                        </button>
+                    </div>
+
+                    <!-- Quick commands -->
+                    <div style="display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap;">
+                        <button class="chip" onclick="setCommand('ls -la')" style="background: #27272a;">ls -la</button>
+                        <button class="chip" onclick="setCommand('pwd')" style="background: #27272a;">pwd</button>
+                        <button class="chip" onclick="setCommand('python3 --version')"
+                            style="background: #27272a;">python3 --version</button>
+                        <button class="chip" onclick="setCommand('pip3 list')" style="background: #27272a;">pip3
+                            list</button>
+                        <button class="chip" onclick="setCommand('systemctl status classlink-web')"
+                            style="background: #27272a;">service status</button>
+                    </div>
+
+                    <!-- Output area -->
+                    <div id="cmd-output"
+                        style="background: #0a0a0a; border: 1px solid #27272a; border-radius: 8px; padding: 16px; min-height: 150px; max-height: 400px; overflow-y: auto; font-family: 'Consolas', 'Monaco', monospace; font-size: 0.85rem; color: #22c55e; white-space: pre-wrap; word-break: break-all;">
+                        <span style="color: #71717a;">Nhập lệnh và nhấn "Chạy" để xem kết quả...</span>
+                    </div>
+
+                    <div
+                        style="margin-top: 12px; padding: 10px; background: rgba(239, 68, 68, 0.1); border-left: 3px solid #ef4444; border-radius: 4px;">
+                        <small style="color: #fca5a5;">
+                            <i class="fas fa-shield-alt"></i> <strong>Bảo mật:</strong> Yêu cầu mật khẩu admin. Một số
+                            lệnh nguy hiểm sẽ bị chặn.
+                        </small>
+                    </div>
+                </div>
             </section>
 
         </main>
