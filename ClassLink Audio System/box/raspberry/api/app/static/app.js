@@ -706,7 +706,26 @@ function downloadPCInstaller() {
     link.click();
     document.body.removeChild(link);
 
-    showToast('✅ Tải xong! Giải nén và chạy install.bat', 'success');
+    // Show instruction modal after a short delay
+    setTimeout(() => {
+        showPCInstallerModal();
+    }, 1000);
+}
+
+// Show PC Installer instruction modal
+function showPCInstallerModal() {
+    const modal = document.getElementById('pc-installer-modal');
+    if (modal) {
+        modal.style.display = 'flex';
+    }
+}
+
+// Close PC Installer modal
+function closePCInstallerModal() {
+    const modal = document.getElementById('pc-installer-modal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
 }
 
 // Check PC service status
