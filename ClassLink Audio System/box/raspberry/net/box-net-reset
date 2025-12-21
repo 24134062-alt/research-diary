@@ -1,1 +1,102 @@
+#!/bin/bash
+###############################################
+# ClassLink - Reset Network Configuration
+# 
+# Xóa tất cả WiFi profiles và quay về AP mode
+# ⚠️ CẢNH BÁO: Sẽ mất tất cả cấu hình WiFi đã lưu!
+###############################################
 
+set -e
+
+# Get script directory
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m'
+
+log_info() {
+    echo -e "${GREEN}[RESET]${NC} $1"
+}
+
+log_warn() {
+    echo -e "${YELLOW}[RESET]${NC} $1"
+}
+
+log_error() {
+    echo -e "${RED}[RESET]${NC} $1"
+}
+
+# Check if running as root
+if [ "$EUID" -ne 0 ]; then
+    log_error "Vui lòng chạy với sudo: sudo $0"
+    exit 1
+fi
+
+# Confirmation prompt (skip with -y flag)
+if [ "$1" != "-y" ] && [ "$1" != "--yes" ]; then
+    echo ""
+    echo -e "${RED}╔══════════════════════════════════════════╗${NC}"
+    echo -e "${RED}║           ⚠️  CẢNH BÁO ⚠️                  ║${NC}"
+    echo -e "${RED}║  Script này sẽ XÓA TẤT CẢ WiFi đã lưu!  ║${NC}"
+    echo -e "${RED}║  Raspberry Pi sẽ chuyển về AP mode.     ║${NC}"
+    echo -e "${RED}╚══════════════════════════════════════════╝${NC}"
+    echo ""
+    read -p "Bạn có chắc chắn? (y/N): " -n 1 -r
+    echo ""
+    
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        log_info "Đã hủy."
+        exit 0
+    fi
+fi
+
+log_info "=========================================="
+log_info "Đang reset cấu hình mạng..."
+log_info "=========================================="
+
+# Disconnect current WiFi
+log_info "[1/4] Ngắt kết nối WiFi hiện tại..."
+nmcli device disconnect wlan0 2>/dev/null || true
+
+# Delete all WiFi connections (except ethernet)
+log_info "[2/4] Xóa tất cả WiFi profiles..."
+WIFI_CONS=$(nmcli -t -f NAME,TYPE connection show | grep ":802-11-wireless$" | cut -d: -f1)
+
+if [ -n "$WIFI_CONS" ]; then
+    echo "$WIFI_CONS" | while read -r con; do
+        log_info "   Xóa: $con"
+        nmcli connection delete "$con" 2>/dev/null || true
+    done
+else
+    log_info "   Không có WiFi profile nào."
+fi
+
+# Delete any config files (if using wpa_supplicant previously)
+log_info "[3/4] Dọn dẹp cấu hình cũ..."
+if [ -f /etc/wpa_supplicant/wpa_supplicant.conf ]; then
+    # Keep the country code, remove networks
+    sed -i '/^network={/,/^}/d' /etc/wpa_supplicant/wpa_supplicant.conf 2>/dev/null || true
+fi
+
+# Start AP mode
+log_info "[4/4] Bật Access Point mode..."
+if [ -x "$SCRIPT_DIR/box-ap-on" ]; then
+    "$SCRIPT_DIR/box-ap-on"
+else
+    log_error "Không tìm thấy script box-ap-on"
+    exit 1
+fi
+
+log_info ""
+log_info "=========================================="
+log_info "✅ Reset hoàn tất!"
+log_info "=========================================="
+log_info ""
+log_info "Raspberry Pi đang phát WiFi: ClassLink-Setup"
+log_info "Kết nối và truy cập: http://192.168.4.1:8000"
+log_info ""
+
+exit 0

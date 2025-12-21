@@ -1,1 +1,39 @@
+[Unit]
+Description=ClassLink UART Communication Service (ESP32)
+Documentation=https://github.com/yourusername/classlink
+After=box-net.service box-api.service
+Wants=box-api.service
 
+[Service]
+Type=simple
+User=pi
+Group=dialout
+WorkingDirectory=/opt/classlink/api
+
+# Environment
+Environment="PATH=/opt/classlink/venv/bin:/usr/local/bin:/usr/bin:/bin"
+Environment="PYTHONUNBUFFERED=1"
+
+# UART device - adjust as needed
+Environment="UART_DEVICE=/dev/ttyAMA0"
+Environment="UART_BAUD=115200"
+
+# Start command - runs UART handler script
+ExecStart=/opt/classlink/venv/bin/python -m app.services.uart_handler
+
+# Restart settings
+Restart=always
+RestartSec=5
+StartLimitIntervalSec=60
+StartLimitBurst=10
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=classlink-uart
+
+# Need access to serial ports
+SupplementaryGroups=dialout
+
+[Install]
+WantedBy=multi-user.target

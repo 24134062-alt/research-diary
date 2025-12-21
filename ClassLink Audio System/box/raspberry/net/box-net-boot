@@ -1,1 +1,120 @@
+#!/bin/bash
+###############################################
+# ClassLink - Network Boot Script
+# 
+# Chạy khi khởi động để quyết định:
+# - Có WiFi đã lưu? → Kết nối
+# - Không có hoặc thất bại? → Bật AP mode
+###############################################
 
+# Get script directory
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m'
+
+log_info() {
+    echo -e "${GREEN}[BOOT]${NC} $1"
+    logger -t classlink-net "$1"
+}
+
+log_warn() {
+    echo -e "${YELLOW}[BOOT]${NC} $1"
+    logger -t classlink-net "WARN: $1"
+}
+
+log_error() {
+    echo -e "${RED}[BOOT]${NC} $1"
+    logger -t classlink-net "ERROR: $1"
+}
+
+# Wait for NetworkManager to be ready
+wait_for_nm() {
+    local timeout=30
+    local count=0
+    
+    while [ $count -lt $timeout ]; do
+        if nmcli general status &>/dev/null; then
+            return 0
+        fi
+        sleep 1
+        count=$((count + 1))
+    done
+    
+    return 1
+}
+
+log_info "=========================================="
+log_info "ClassLink Network Boot - Starting..."
+log_info "=========================================="
+
+# Wait for NetworkManager
+log_info "Đợi NetworkManager khởi động..."
+if ! wait_for_nm; then
+    log_error "NetworkManager không sẵn sàng sau 30s"
+    exit 1
+fi
+
+log_info "NetworkManager sẵn sàng."
+
+# Check if there are any saved WiFi connections (excluding hotspot)
+SAVED_WIFI=$(nmcli -t -f NAME,TYPE connection show | grep ":802-11-wireless$" | grep -v "ClassLink-Hotspot" | cut -d: -f1 | head -1)
+
+if [ -n "$SAVED_WIFI" ]; then
+    log_info "Tìm thấy WiFi đã lưu: $SAVED_WIFI"
+    log_info "Đang thử kết nối..."
+    
+    # Try to connect to the saved network
+    if nmcli --wait 30 connection up "$SAVED_WIFI" 2>/dev/null; then
+        sleep 3
+        
+        # Verify connection
+        CONNECTED=$(nmcli -t -f ACTIVE,SSID device wifi | grep "^yes:" | cut -d: -f2)
+        
+        if [ -n "$CONNECTED" ]; then
+            IP_ADDR=$(ip -4 addr show wlan0 | grep -oP '(?<=inet\s)\d+\.\d+\.\d+\.\d+' | head -1)
+            log_info "✅ Kết nối WiFi thành công!"
+            log_info "   SSID: $CONNECTED"
+            log_info "   IP: ${IP_ADDR:-N/A}"
+            
+            # Test internet
+            if ping -c 1 -W 5 8.8.8.8 &>/dev/null; then
+                log_info "🌐 Internet: OK"
+            else
+                log_warn "⚠️ Kết nối WiFi nhưng không có Internet"
+            fi
+            
+            exit 0
+        fi
+    fi
+    
+    log_warn "Không thể kết nối đến $SAVED_WIFI"
+fi
+
+# No saved WiFi or connection failed → Start AP mode
+log_info "Không có kết nối WiFi → Bật Access Point mode"
+
+# Call ap-on script
+if [ -x "$SCRIPT_DIR/box-ap-on" ]; then
+    "$SCRIPT_DIR/box-ap-on"
+else
+    log_error "Không tìm thấy script box-ap-on"
+    
+    # Inline AP setup as fallback
+    AP_SSID="${CLASSLINK_AP_SSID:-ClassLink-Setup}"
+    AP_PASS="${CLASSLINK_AP_PASS:-classlink2024}"
+    
+    nmcli connection delete "ClassLink-Hotspot" 2>/dev/null || true
+    nmcli connection add type wifi ifname wlan0 con-name "ClassLink-Hotspot" \
+        autoconnect no ssid "$AP_SSID" wifi.mode ap wifi.band bg wifi.channel 7 \
+        ipv4.method shared ipv4.addresses "192.168.4.1/24" \
+        wifi-sec.key-mgmt wpa-psk wifi-sec.psk "$AP_PASS"
+    nmcli connection up "ClassLink-Hotspot"
+    
+    log_info "✅ Fallback AP mode activated"
+fi
+
+exit 0

@@ -1,1 +1,37 @@
+[Unit]
+Description=ClassLink Web Dashboard API
+Documentation=https://github.com/yourusername/classlink
+After=network.target NetworkManager.service box-net.service
+Wants=network-online.target
+Requires=NetworkManager.service
 
+[Service]
+Type=simple
+User=pi
+Group=pi
+WorkingDirectory=/opt/classlink/api
+
+# Environment
+Environment="PATH=/opt/classlink/venv/bin:/usr/local/bin:/usr/bin:/bin"
+Environment="PYTHONUNBUFFERED=1"
+
+# Start command
+ExecStart=/opt/classlink/venv/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
+
+# Restart settings
+Restart=always
+RestartSec=5
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=classlink-api
+
+# Security hardening
+NoNewPrivileges=yes
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target

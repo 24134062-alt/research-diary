@@ -1,1 +1,73 @@
+#!/bin/bash
+###############################################
+# ClassLink - Tắt WiFi Access Point Mode
+# 
+# Dừng hotspot và chuyển về client mode
+###############################################
 
+set -e
+
+AP_CON_NAME="ClassLink-Hotspot"
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m'
+
+log_info() {
+    echo -e "${GREEN}[AP-OFF]${NC} $1"
+}
+
+log_warn() {
+    echo -e "${YELLOW}[AP-OFF]${NC} $1"
+}
+
+log_error() {
+    echo -e "${RED}[AP-OFF]${NC} $1"
+}
+
+# Check if running as root
+if [ "$EUID" -ne 0 ]; then
+    log_error "Vui lòng chạy với sudo: sudo $0"
+    exit 1
+fi
+
+log_info "Đang tắt Access Point..."
+
+# Deactivate hotspot
+if nmcli connection show --active | grep -q "$AP_CON_NAME"; then
+    log_info "Dừng hotspot..."
+    nmcli connection down "$AP_CON_NAME" || true
+fi
+
+# Delete the connection profile
+if nmcli connection show | grep -q "$AP_CON_NAME"; then
+    log_info "Xóa cấu hình hotspot..."
+    nmcli connection delete "$AP_CON_NAME" || true
+fi
+
+# Re-enable WiFi scanning/autoconnect
+log_info "Kích hoạt lại WiFi client mode..."
+nmcli device set wlan0 autoconnect yes
+nmcli device set wlan0 managed yes
+
+# Try to auto-connect to any saved network
+log_info "Thử kết nối WiFi đã lưu..."
+nmcli device wifi rescan 2>/dev/null || true
+sleep 2
+nmcli --wait 10 device connect wlan0 2>/dev/null || true
+
+# Check status
+sleep 2
+CONNECTED_SSID=$(nmcli -t -f ACTIVE,SSID device wifi | grep "^yes:" | cut -d: -f2)
+
+if [ -n "$CONNECTED_SSID" ]; then
+    log_info "✅ Access Point đã tắt!"
+    log_info "📶 Đã kết nối WiFi: $CONNECTED_SSID"
+else
+    log_warn "⚠️ Access Point đã tắt, nhưng chưa kết nối WiFi nào."
+    log_warn "Dùng web dashboard hoặc chạy: box-wifi-connect <SSID> <password>"
+fi
+
+exit 0

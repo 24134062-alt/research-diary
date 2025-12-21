@@ -1,1 +1,174 @@
+#!/bin/bash
+###############################################
+# ClassLink - WiFi Watchdog
+# 
+# Giám sát kết nối WiFi, tự kết nối lại nếu mất
+# Chạy liên tục bởi systemd hoặc cron
+#
+# Usage: box-wifi-watchdog [--daemon]
+#   --daemon: Chạy liên tục (cho systemd)
+#   Không có flag: Chạy 1 lần (cho cron)
+###############################################
 
+# Get script directory
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Configuration
+CHECK_INTERVAL=60          # Seconds between checks in daemon mode
+FAIL_THRESHOLD=3           # Number of failures before switching to AP mode
+AP_CON_NAME="ClassLink-Hotspot"
+STATE_FILE="/var/run/classlink-watchdog.state"
+
+# Colors (disabled in daemon mode)
+if [ -t 1 ]; then
+    RED='\033[0;31m'
+    GREEN='\033[0;32m'
+    YELLOW='\033[1;33m'
+    NC='\033[0m'
+else
+    RED=''
+    GREEN=''
+    YELLOW=''
+    NC=''
+fi
+
+log_info() {
+    echo -e "${GREEN}[WATCHDOG]${NC} $(date '+%H:%M:%S') $1"
+    logger -t classlink-watchdog "$1"
+}
+
+log_warn() {
+    echo -e "${YELLOW}[WATCHDOG]${NC} $(date '+%H:%M:%S') $1"
+    logger -t classlink-watchdog "WARN: $1"
+}
+
+log_error() {
+    echo -e "${RED}[WATCHDOG]${NC} $(date '+%H:%M:%S') $1"
+    logger -t classlink-watchdog "ERROR: $1"
+}
+
+# Get/Set failure counter
+get_fail_count() {
+    if [ -f "$STATE_FILE" ]; then
+        cat "$STATE_FILE" 2>/dev/null || echo 0
+    else
+        echo 0
+    fi
+}
+
+set_fail_count() {
+    echo "$1" > "$STATE_FILE" 2>/dev/null || true
+}
+
+# Check if in AP mode
+is_ap_mode() {
+    nmcli connection show --active | grep -q "$AP_CON_NAME"
+}
+
+# Check WiFi connection
+check_connection() {
+    # Skip if in AP mode (intentional)
+    if is_ap_mode; then
+        log_info "AP mode active - không cần kiểm tra"
+        set_fail_count 0
+        return 0
+    fi
+    
+    # Check if connected to any WiFi
+    CONNECTED=$(nmcli -t -f ACTIVE,SSID device wifi | grep "^yes:" | cut -d: -f2)
+    
+    if [ -z "$CONNECTED" ]; then
+        log_warn "Không có kết nối WiFi!"
+        return 1
+    fi
+    
+    # Test connectivity (ping gateway or DNS)
+    GATEWAY=$(ip route | grep default | awk '{print $3}' | head -1)
+    
+    if [ -n "$GATEWAY" ]; then
+        if ping -c 1 -W 3 "$GATEWAY" &>/dev/null; then
+            log_info "✅ Kết nối OK: $CONNECTED (Gateway: $GATEWAY)"
+            set_fail_count 0
+            return 0
+        fi
+    fi
+    
+    # Try pinging DNS as fallback
+    if ping -c 1 -W 3 8.8.8.8 &>/dev/null; then
+        log_info "✅ Kết nối OK: $CONNECTED (Internet OK)"
+        set_fail_count 0
+        return 0
+    fi
+    
+    log_warn "Kết nối $CONNECTED nhưng không có phản hồi mạng"
+    return 1
+}
+
+# Attempt to reconnect
+attempt_reconnect() {
+    log_info "Đang thử kết nối lại..."
+    
+    # Get the first saved WiFi connection (not hotspot)
+    SAVED_WIFI=$(nmcli -t -f NAME,TYPE connection show | grep ":802-11-wireless$" | grep -v "$AP_CON_NAME" | cut -d: -f1 | head -1)
+    
+    if [ -z "$SAVED_WIFI" ]; then
+        log_warn "Không có WiFi đã lưu - chuyển sang AP mode"
+        return 1
+    fi
+    
+    # Attempt connection
+    if nmcli --wait 20 connection up "$SAVED_WIFI" 2>/dev/null; then
+        sleep 3
+        if check_connection; then
+            log_info "✅ Kết nối lại thành công!"
+            return 0
+        fi
+    fi
+    
+    log_error "Không thể kết nối lại $SAVED_WIFI"
+    return 1
+}
+
+# Single check mode
+single_check() {
+    if ! check_connection; then
+        FAIL_COUNT=$(($(get_fail_count) + 1))
+        set_fail_count $FAIL_COUNT
+        
+        log_warn "Lỗi kết nối (lần $FAIL_COUNT/$FAIL_THRESHOLD)"
+        
+        if [ $FAIL_COUNT -ge $FAIL_THRESHOLD ]; then
+            log_error "Vượt ngưỡng lỗi - bật AP mode"
+            
+            if [ -x "$SCRIPT_DIR/box-ap-on" ]; then
+                "$SCRIPT_DIR/box-ap-on"
+            fi
+            
+            set_fail_count 0
+        else
+            attempt_reconnect
+        fi
+    fi
+}
+
+# Daemon mode
+daemon_mode() {
+    log_info "Watchdog daemon started (interval: ${CHECK_INTERVAL}s)"
+    
+    while true; do
+        single_check
+        sleep $CHECK_INTERVAL
+    done
+}
+
+# Main
+case "$1" in
+    --daemon|-d)
+        daemon_mode
+        ;;
+    *)
+        single_check
+        ;;
+esac
+
+exit 0

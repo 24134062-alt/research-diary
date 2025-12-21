@@ -2,6 +2,53 @@
 
 All notable changes to ClassLink Audio System will be documented in this file.
 
+## [2024-12-21] - Raspberry Pi Network Management Complete
+
+### Added (trong `box/raspberry/`)
+
+#### Network Scripts (`net/`)
+| Script | Chức năng |
+|--------|-----------|
+| `box-ap-on` | Bật WiFi Access Point mode (NetworkManager) |
+| `box-ap-off` | Tắt AP, chuyển về Client mode |
+| `box-wifi-scan` | Quét WiFi (hỗ trợ --json) |
+| `box-wifi-connect` | Kết nối WiFi và lưu credentials |
+| `box-net-boot` | Boot script: tự kết nối WiFi hoặc bật AP |
+| `box-net-reset` | Reset toàn bộ cấu hình mạng |
+| `box-wifi-watchdog` | Giám sát kết động, tự reconnect |
+
+#### Systemd Services (`services/`)
+| Service | Chức năng |
+|---------|-----------|
+| `box-api.service` | Web Dashboard FastAPI (port 8000) |
+| `box-net.service` | Chạy box-net-boot khi khởi động |
+| `box-watchdog.timer` | Chạy watchdog mỗi 60s |
+| `box-watchdog.service` | Service cho watchdog timer |
+| `box-uart.service` | Giao tiếp UART với ESP32 |
+
+#### Documentation & Installation
+- `README.md` - Hướng dẫn cài đặt đầy đủ
+- `install.sh` - Script cài đặt tự động
+
+### Changed
+- **Thống nhất NetworkManager**: Tất cả scripts dùng `nmcli` thay vì mix dhcpcd + hostapd
+- Xóa bỏ phụ thuộc vào `dhcpcd`, `hostapd`, `dnsmasq` cũ
+
+### HƯỚNG DẪN CÀI ĐẶT
+
+```bash
+# SSH vào Raspberry Pi
+ssh pi@<IP>
+
+# Clone và cài đặt
+git clone <repo>
+cd "ClassLink Audio System/box/raspberry"
+sudo ./install.sh
+sudo reboot
+```
+
+---
+
 ## [2024-12-20] - Raspberry Pi Setup Scripts & WiFi Features
 
 ### SCRIPTS ĐÃ TẠO (trong `box/raspberry/`)

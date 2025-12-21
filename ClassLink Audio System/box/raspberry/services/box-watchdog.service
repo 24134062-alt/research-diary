@@ -1,0 +1,15 @@
+[Unit]
+Description=ClassLink WiFi Watchdog Service
+After=box-net.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/classlink/net/box-wifi-watchdog
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=classlink-watchdog
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,12 @@
+[Unit]
+Description=ClassLink WiFi Watchdog Timer
+After=box-net.service NetworkManager.service
+Requires=box-net.service
+
+[Timer]
+# Run 1 minute after boot, then every 60 seconds
+OnBootSec=60
+OnUnitActiveSec=60
+
+[Install]
+WantedBy=timers.target

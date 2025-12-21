@@ -1,1 +1,24 @@
+[Unit]
+Description=ClassLink Network Manager
+Documentation=https://github.com/yourusername/classlink
+After=NetworkManager.service
+Wants=NetworkManager.service
+Before=box-api.service
 
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+
+# Run boot script to setup network (AP or connect to saved WiFi)
+ExecStart=/opt/classlink/net/box-net-boot
+
+# On stop, turn off AP mode
+ExecStop=/opt/classlink/net/box-ap-off
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=classlink-net
+
+[Install]
+WantedBy=multi-user.target

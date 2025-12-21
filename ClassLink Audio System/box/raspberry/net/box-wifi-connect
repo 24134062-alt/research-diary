@@ -1,1 +1,111 @@
+#!/bin/bash
+###############################################
+# ClassLink - Kết nối WiFi
+# 
+# Usage: box-wifi-connect <SSID> [password]
+# Lưu connection profile để tự kết nối khi boot
+###############################################
 
+set -e
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m'
+
+log_info() {
+    echo -e "${GREEN}[WIFI]${NC} $1"
+}
+
+log_warn() {
+    echo -e "${YELLOW}[WIFI]${NC} $1"
+}
+
+log_error() {
+    echo -e "${RED}[WIFI]${NC} $1"
+}
+
+# Parse arguments
+SSID="$1"
+PASSWORD="$2"
+
+if [ -z "$SSID" ]; then
+    echo "Usage: $0 <SSID> [password]"
+    echo ""
+    echo "Examples:"
+    echo "  $0 \"MyHomeWiFi\" \"mypassword123\""
+    echo "  $0 \"OpenNetwork\""
+    exit 1
+fi
+
+log_info "Đang kết nối đến: $SSID"
+
+# Check if running as root (recommended for connection changes)
+if [ "$EUID" -ne 0 ]; then
+    log_warn "Khuyến nghị chạy với sudo để lưu cấu hình"
+fi
+
+# First, turn off AP mode if it's active
+AP_CON_NAME="ClassLink-Hotspot"
+if nmcli connection show --active | grep -q "$AP_CON_NAME"; then
+    log_info "Tắt Access Point mode trước..."
+    nmcli connection down "$AP_CON_NAME" 2>/dev/null || true
+    nmcli connection delete "$AP_CON_NAME" 2>/dev/null || true
+    sleep 2
+fi
+
+# Trigger a fresh WiFi scan
+log_info "Quét WiFi..."
+nmcli device wifi rescan 2>/dev/null || true
+sleep 2
+
+# Build connection command
+CMD="nmcli --wait 30 device wifi connect \"$SSID\""
+if [ -n "$PASSWORD" ]; then
+    CMD="$CMD password \"$PASSWORD\""
+fi
+
+# Attempt connection
+log_info "Đang kết nối..."
+if eval $CMD; then
+    # Verify connection
+    sleep 3
+    CONNECTED=$(nmcli -t -f ACTIVE,SSID device wifi | grep "^yes:" | cut -d: -f2)
+    
+    if [ "$CONNECTED" = "$SSID" ]; then
+        # Get IP address
+        IP_ADDR=$(ip -4 addr show wlan0 | grep -oP '(?<=inet\s)\d+\.\d+\.\d+\.\d+' | head -1)
+        
+        log_info "✅ Kết nối thành công!"
+        log_info ""
+        log_info "📶 Thông tin kết nối:"
+        log_info "   SSID: $SSID"
+        log_info "   IP: ${IP_ADDR:-đang lấy...}"
+        log_info ""
+        log_info "💾 Mật khẩu đã được lưu. Raspberry Pi sẽ tự kết nối"
+        log_info "   khi khởi động lại."
+        
+        # Test internet connectivity
+        if ping -c 1 -W 3 8.8.8.8 &>/dev/null; then
+            log_info "🌐 Internet: OK"
+        else
+            log_warn "⚠️ Internet: Không có kết nối ra ngoài"
+        fi
+        
+        exit 0
+    else
+        log_error "❌ Kết nối nhưng SSID không khớp: $CONNECTED"
+        exit 1
+    fi
+else
+    log_error "❌ Không thể kết nối đến $SSID"
+    log_error ""
+    log_error "Nguyên nhân có thể:"
+    log_error "  - Mật khẩu sai"
+    log_error "  - WiFi ngoài tầm phủ sóng"
+    log_error "  - SSID không tồn tại"
+    log_error ""
+    log_error "Thử quét lại WiFi: box-wifi-scan"
+    exit 1
+fi
