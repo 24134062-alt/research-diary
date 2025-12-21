@@ -1,0 +1,11 @@
+# ClassLink - Allow pi user to run nmcli WiFi commands without password
+# Copy this file to /etc/sudoers.d/classlink-wifi
+# Then run: sudo chmod 440 /etc/sudoers.d/classlink-wifi
+
+# Allow pi to run nmcli for WiFi operations
+pi ALL=(ALL) NOPASSWD: /usr/bin/nmcli device wifi connect *
+pi ALL=(ALL) NOPASSWD: /usr/bin/nmcli device wifi rescan
+pi ALL=(ALL) NOPASSWD: /usr/bin/nmcli connection up *
+pi ALL=(ALL) NOPASSWD: /usr/bin/nmcli connection down *
+pi ALL=(ALL) NOPASSWD: /usr/bin/nmcli connection delete *
+pi ALL=(ALL) NOPASSWD: /usr/bin/nmcli connection add *

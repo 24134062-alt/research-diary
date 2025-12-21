@@ -110,6 +110,14 @@ if [ -f "$SCRIPT_DIR/config.example.yaml" ]; then
     cp "$SCRIPT_DIR/config.example.yaml" "$INSTALL_DIR/config/"
 fi
 
+# Setup sudoers for WiFi control (allow pi to run nmcli without password)
+log_info "Cấu hình quyền WiFi cho user pi..."
+if [ -f "$SCRIPT_DIR/config/classlink-wifi-sudoers" ]; then
+    cp "$SCRIPT_DIR/config/classlink-wifi-sudoers" /etc/sudoers.d/classlink-wifi
+    chmod 440 /etc/sudoers.d/classlink-wifi
+    log_info "Sudoers rule đã được cài đặt"
+fi
+
 # Set ownership
 chown -R "$ACTUAL_USER:$ACTUAL_USER" "$INSTALL_DIR"
 

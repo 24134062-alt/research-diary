@@ -190,8 +190,8 @@ async def connect_wifi(data: dict):
     
     if platform.system() == "Linux":
         try:
-            # Use nmcli to connect - this automatically saves the connection profile
-            cmd = ["nmcli", "device", "wifi", "connect", ssid]
+            # Use sudo + nmcli to connect - needs root for WiFi operations
+            cmd = ["sudo", "nmcli", "device", "wifi", "connect", ssid]
             
             if password:
                 cmd.extend(["password", password])
