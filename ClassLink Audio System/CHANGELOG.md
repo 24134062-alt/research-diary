@@ -8,8 +8,8 @@ All notable changes to ClassLink Audio System will be documented in this file.
 
 #### Text Display Improvements
 - **TextSize 2**: Chữ to hơn (12x16 pixels) cho hiển thị qua gương trong suốt
-- **Auto-scroll pagination**: Text dài tự động cuộn từng trang (2 giây/trang)
-- **Page indicator**: Hiển thị số trang (1/3, 2/3...) ở góc dưới phải
+- **Typewriter Scroll Effect**: Chữ hiện từng ký tự (80ms), scroll lên khi hết màn hình
+- **Word wrap**: Không cắt chữ giữa từ khi xuống dòng
 
 #### Message Queue System
 - **Queue 10 messages**: Tin nhắn mới được xếp hàng đợi, không mất
@@ -21,8 +21,13 @@ All notable changes to ClassLink Audio System will be documented in this file.
 - **AI ON**: Chỉ nhận câu trả lời AI (ai/answer), không nhận text GV
 - Subscribe thêm topic `ai/answer`
 
+#### 3D Shapes Display (Test)
+- Cube, Pyramid, Sphere, Cylinder
+- H2O molecule, Coordinate system
+- **Rotating Cube animation** (xoay 360°)
+
 ### Changed
-- `displayText()`: Sử dụng TextSize 2 thay vì 1
+- `displayText()`: Typewriter scroll effect thay vì pagination
 - `mqttCallback()`: Đưa message vào queue thay vì hiển thị trực tiếp
 - Logic kiểm tra `aiAssistantActive` để lọc nguồn text
 
