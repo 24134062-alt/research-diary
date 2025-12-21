@@ -29,8 +29,8 @@ StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=classlink-api
 
-# Security hardening
-NoNewPrivileges=yes
+# Security hardening (NoNewPrivileges disabled to allow sudo for WiFi management)
+# NoNewPrivileges=yes
 PrivateTmp=yes
 
 [Install]

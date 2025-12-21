@@ -5,7 +5,13 @@
 # Allow pi to run nmcli for WiFi operations
 pi ALL=(ALL) NOPASSWD: /usr/bin/nmcli device wifi connect *
 pi ALL=(ALL) NOPASSWD: /usr/bin/nmcli device wifi rescan
+pi ALL=(ALL) NOPASSWD: /usr/bin/nmcli device disconnect *
 pi ALL=(ALL) NOPASSWD: /usr/bin/nmcli connection up *
 pi ALL=(ALL) NOPASSWD: /usr/bin/nmcli connection down *
 pi ALL=(ALL) NOPASSWD: /usr/bin/nmcli connection delete *
 pi ALL=(ALL) NOPASSWD: /usr/bin/nmcli connection add *
+
+# Allow pi to run AP control scripts
+pi ALL=(ALL) NOPASSWD: /opt/classlink/net/box-ap-on
+pi ALL=(ALL) NOPASSWD: /opt/classlink/net/box-ap-off
+pi ALL=(ALL) NOPASSWD: /opt/classlink/net/box-wifi-connect
