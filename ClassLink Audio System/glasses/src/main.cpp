@@ -65,6 +65,40 @@ bool aiAssistantActive = false; // AI trợ giảng bật/tắt
 bool isRecording = true;        // Đang ghi âm
 uint32_t packetSequence = 0;
 
+// ====== Message Queue for Text Display ======
+#define MESSAGE_QUEUE_SIZE 10
+String messageQueue[MESSAGE_QUEUE_SIZE];
+int queueHead = 0;             // Vị trí đọc
+int queueTail = 0;             // Vị trí ghi
+bool isDisplayingText = false; // Đang hiển thị text?
+
+// Queue functions
+bool queueIsEmpty() { return queueHead == queueTail; }
+bool queueIsFull() {
+  return ((queueTail + 1) % MESSAGE_QUEUE_SIZE) == queueHead;
+}
+
+void queuePush(String msg) {
+  if (!queueIsFull()) {
+    messageQueue[queueTail] = msg;
+    queueTail = (queueTail + 1) % MESSAGE_QUEUE_SIZE;
+    Serial.printf("[QUEUE] Added message. Queue size: %d\n",
+                  (queueTail - queueHead + MESSAGE_QUEUE_SIZE) %
+                      MESSAGE_QUEUE_SIZE);
+  } else {
+    Serial.println("[QUEUE] Queue full! Message dropped.");
+  }
+}
+
+String queuePop() {
+  if (!queueIsEmpty()) {
+    String msg = messageQueue[queueHead];
+    queueHead = (queueHead + 1) % MESSAGE_QUEUE_SIZE;
+    return msg;
+  }
+  return "";
+}
+
 // ====== Button Debouncing ======
 unsigned long lastBtnModePress = 0;
 unsigned long lastBtnAIPress = 0;
@@ -84,6 +118,7 @@ void handleButtons();
 void sendAudioPacket();
 void updateDisplay();
 void displayText(const char *text);
+void processMessageQueue();
 
 // ====== Setup ======
 void setup() {
@@ -142,6 +177,9 @@ void loop() {
 
   // Handle button presses
   handleButtons();
+
+  // Process message queue (non-blocking)
+  processMessageQueue();
 
   // Audio recording & sending
   if (isRecording) {
@@ -220,9 +258,9 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
   }
   Serial.printf("[MQTT] %s: %s\n", topic, msg.c_str());
 
-  // Nhận text từ AI để hiển thị
+  // Nhận text từ AI để hiển thị - đưa vào queue thay vì hiển thị trực tiếp
   if (String(topic) == "glasses/text") {
-    displayText(msg.c_str());
+    queuePush(msg); // Thêm vào hàng đợi, không block
   }
 
   // Nhận lệnh điều khiển
@@ -430,5 +468,23 @@ void sendAudioPacket() {
     udp.endPacket();
 
     packetSequence++;
+  }
+}
+
+// ====== Process Message Queue ======
+// Non-blocking: Kiểm tra và hiển thị message tiếp theo từ queue
+void processMessageQueue() {
+  // Nếu đang hiển thị hoặc queue rỗng thì bỏ qua
+  if (isDisplayingText || queueIsEmpty()) {
+    return;
+  }
+
+  // Lấy message tiếp theo từ queue
+  String msg = queuePop();
+  if (msg.length() > 0) {
+    isDisplayingText = true;
+    Serial.printf("[QUEUE] Processing message: %s\n", msg.c_str());
+    displayText(msg.c_str());
+    isDisplayingText = false;
   }
 }
