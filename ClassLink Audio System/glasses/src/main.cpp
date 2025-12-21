@@ -348,25 +348,63 @@ void updateDisplay() {
   display.display();
 }
 
-// ====== Display Text from AI ======
+// ====== Display Text from AI (Large + Scrolling) ======
+// TextSize 2: 12x16 px, ~10 ký tự/dòng, 4 dòng
+// Auto-scroll cho text dài
+
+#define TEXT_SIZE 2
+#define CHARS_PER_LINE 10
+#define LINES_PER_SCREEN 4
+#define SCROLL_DELAY_MS 2000 // Thời gian hiển thị mỗi trang
+
 void displayText(const char *text) {
-  display.clearDisplay();
+  String textStr = String(text);
+  int textLen = textStr.length();
 
-  // Header
-  display.setTextSize(1);
-  display.setCursor(0, 0);
-  display.println("AI Response:");
-  display.drawLine(0, 10, 128, 10, SSD1306_WHITE);
+  // Tính số ký tự tối đa mỗi màn hình
+  int charsPerScreen = CHARS_PER_LINE * LINES_PER_SCREEN; // ~40 ký tự
 
-  // Text content (word wrap)
-  display.setCursor(0, 14);
-  display.setTextWrap(true);
-  display.println(text);
+  // Nếu text ngắn, hiển thị thẳng
+  if (textLen <= charsPerScreen) {
+    display.clearDisplay();
+    display.setTextSize(TEXT_SIZE);
+    display.setTextWrap(true);
+    display.setCursor(0, 0);
+    display.println(text);
+    display.display();
+    delay(5000); // Hiển thị 5 giây
+    updateDisplay();
+    return;
+  }
 
-  display.display();
+  // Text dài - cuộn từng trang
+  int totalPages = (textLen + charsPerScreen - 1) / charsPerScreen;
 
-  // Auto-return to status after 10 seconds
-  delay(10000);
+  for (int page = 0; page < totalPages; page++) {
+    display.clearDisplay();
+    display.setTextSize(TEXT_SIZE);
+    display.setTextWrap(true);
+    display.setCursor(0, 0);
+
+    // Cắt đoạn text cho trang hiện tại
+    int startIdx = page * charsPerScreen;
+    int endIdx = min(startIdx + charsPerScreen, textLen);
+    String pageText = textStr.substring(startIdx, endIdx);
+
+    display.println(pageText);
+
+    // Hiển thị indicator trang (góc dưới phải)
+    display.setTextSize(1);
+    display.setCursor(100, 56);
+    display.print(page + 1);
+    display.print("/");
+    display.print(totalPages);
+
+    display.display();
+    delay(SCROLL_DELAY_MS);
+  }
+
+  // Quay về màn hình status
   updateDisplay();
 }
 
