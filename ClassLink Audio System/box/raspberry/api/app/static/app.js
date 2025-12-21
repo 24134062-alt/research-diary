@@ -430,6 +430,8 @@ function connectToWiFi(ssid, isSecure) {
         return;
     }
 
+    showToast('🔄 Đang kết nối...', 'info');
+
     fetch(`${API_URL}/api/wifi/connect`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -437,12 +439,83 @@ function connectToWiFi(ssid, isSecure) {
     })
         .then(res => res.json())
         .then(data => {
-            alert(`✅ ${data.message}`);
+            if (data.status === 'success' && data.new_url) {
+                // Show modal with new URL
+                showNewIPModal(ssid, data.new_url);
+            } else if (data.status === 'success') {
+                showToast(`✅ ${data.message}`, 'success');
+            } else {
+                showToast(`❌ ${data.message}`, 'error');
+            }
         })
         .catch(e => {
             console.error("Connection failed", e);
-            alert('❌ Kết nối thất bại. Vui lòng thử lại.');
+            showToast('❌ Kết nối thất bại. Vui lòng thử lại.', 'error');
         });
+}
+
+// Show modal with new IP after WiFi connection
+function showNewIPModal(ssid, newUrl) {
+    // Create modal if it doesn't exist
+    let modal = document.getElementById('new-ip-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'new-ip-modal';
+        modal.className = 'modal active';
+        modal.innerHTML = `
+            <div class="modal-content" style="text-align: center;">
+                <h3 style="color: #22c55e;">✅ Kết nối thành công!</h3>
+                <p style="color: var(--text-secondary);">Đã kết nối WiFi: <span id="new-ssid" style="color: white;"></span></p>
+                <div style="margin: 20px 0;">
+                    <p style="margin-bottom: 10px;">Truy cập web mới tại:</p>
+                    <div style="background: #09090b; padding: 15px; border-radius: 8px; border: 1px solid var(--primary);">
+                        <code id="new-url" style="font-size: 1.1rem; color: var(--primary);"></code>
+                    </div>
+                </div>
+                <div class="modal-actions" style="justify-content: center; gap: 12px;">
+                    <button class="btn-primary" onclick="copyNewUrl()">
+                        <i class="fas fa-copy"></i> Sao chép URL
+                    </button>
+                    <button class="btn-ghost" onclick="closeNewIPModal()">Đóng</button>
+                </div>
+                <p style="margin-top: 15px; font-size: 0.85rem; color: var(--text-secondary);">
+                    ⚠️ Kết nối WiFi <span id="new-ssid-2" style="color: white;"></span> trên thiết bị của bạn, sau đó dán URL vào trình duyệt.
+                </p>
+            </div>
+        `;
+        document.body.appendChild(modal);
+    } else {
+        modal.classList.add('active');
+    }
+
+    // Update content
+    document.getElementById('new-ssid').textContent = ssid;
+    document.getElementById('new-ssid-2').textContent = ssid;
+    document.getElementById('new-url').textContent = newUrl;
+    modal.dataset.url = newUrl;
+}
+
+function copyNewUrl() {
+    const modal = document.getElementById('new-ip-modal');
+    const url = modal ? modal.dataset.url : '';
+
+    navigator.clipboard.writeText(url).then(() => {
+        showToast('📋 Đã sao chép URL!', 'success');
+    }).catch(() => {
+        // Fallback for older browsers
+        const textArea = document.createElement('textarea');
+        textArea.value = url;
+        document.body.appendChild(textArea);
+        textArea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textArea);
+        showToast('📋 Đã sao chép URL!', 'success');
+    });
+}
+
+function closeNewIPModal() {
+    const modal = document.getElementById('new-ip-modal');
+    if (modal) modal.classList.remove('active');
 }
 
 // --- WiFi Status & Failover ---

@@ -205,10 +205,35 @@ async def connect_wifi(data: dict):
             
             if result.returncode == 0:
                 print(f"✅ Connected to {ssid}")
+                
+                # Wait for IP address to be assigned
+                await asyncio.sleep(3)
+                
+                # Get new IP address
+                new_ip = None
+                try:
+                    ip_result = subprocess.check_output(
+                        ["ip", "-4", "addr", "show", "wlan0"],
+                        stderr=subprocess.STDOUT,
+                        timeout=5
+                    )
+                    ip_output = ip_result.decode("utf-8", errors="ignore")
+                    # Parse IP from output like "inet 192.168.0.105/24"
+                    import re
+                    match = re.search(r'inet (\d+\.\d+\.\d+\.\d+)', ip_output)
+                    if match:
+                        new_ip = match.group(1)
+                except Exception as e:
+                    print(f"[WiFi] Error getting new IP: {e}")
+                
+                new_url = f"http://{new_ip}:8000" if new_ip else None
+                
                 return {
                     "status": "success",
                     "message": f"Connected to {ssid}. Password saved.",
-                    "ssid": ssid
+                    "ssid": ssid,
+                    "new_ip": new_ip,
+                    "new_url": new_url
                 }
             else:
                 error_msg = result.stderr.strip() or result.stdout.strip()
