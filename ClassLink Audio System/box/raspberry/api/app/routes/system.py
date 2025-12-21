@@ -136,42 +136,51 @@ async def get_system_info():
 async def download_pc_installer():
     """Download PC AI Service installer as ZIP"""
     try:
-        # Get installer directory (relative to project structure)
-        # box/raspberry/api -> go up 4 levels to ClassLink Audio System, then pc/installer
+        # Get ai_service directory (relative to project structure)
+        # box/raspberry/api -> go up 4 levels to ClassLink Audio System, then pc/ai_service
         base_dir = Path(__file__).resolve().parent.parent.parent.parent.parent
-        installer_dir = base_dir / "pc" / "installer"
+        ai_service_dir = base_dir / "pc" / "ai_service"
         
-        if not installer_dir.exists():
-            raise HTTPException(status_code=404, detail="Installer directory not found")
+        if not ai_service_dir.exists():
+            raise HTTPException(status_code=404, detail="PC AI Service directory not found")
         
         # Create ZIP in memory
         zip_buffer = io.BytesIO()
         
         with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
-            # Add installer files
-            for file in installer_dir.glob("*"):
-                if file.is_file():
-                    arcname = f"ClassLink-PC-Installer/{file.name}"
-                    zip_file.write(file, arcname)
+            # Add ai_service files
+            for root, dirs, files in os.walk(ai_service_dir):
+                # Skip venv, __pycache__
+                dirs[:] = [d for d in dirs if d not in ['venv', '__pycache__', '.git']]
+                
+                for file in files:
+                    file_path = os.path.join(root, file)
+                    # Create relative path inside ZIP
+                    rel_path = os.path.relpath(file_path, ai_service_dir)
+                    arcname = f"ClassLink-AI-Service/{rel_path}"
+                    zip_file.write(file_path, arcname)
             
             # Add README
-            readme_content = """ClassLink PC AI Service Installer
+            readme_content = """ClassLink PC AI Service
 ====================================
 
 HƯỚNG DẪN CÀI ĐẶT:
 
 1. Giải nén thư mục này
-2. Mở file config.template.env và thay YOUR_API_KEY_HERE bằng API key Gemini của bạn
-3. Đổi tên config.template.env thành config.env
-4. Chạy file install.bat (nhấp đúp chuột)
-5. Chờ cài đặt hoàn tất
-
-Sau khi cài xong, PC AI Service sẽ tự động chạy mỗi khi bật máy!
+2. Chạy file install.bat (nhấp đúp chuột)
+3. File config.env sẽ tự động mở
+4. Thay "paste_your_api_key_here" bằng API key Gemini của bạn
+5. Lưu và đóng Notepad
+6. Chạy file start.bat để khởi động AI Service
 
 Để lấy API Key Gemini miễn phí:
 https://aistudio.google.com/app/apikey
+
+LƯU Ý:
+- Cần cài Python 3.10+ trước
+- Máy tính phải cùng mạng WiFi với Raspberry Pi
 """
-            zip_file.writestr("ClassLink-PC-Installer/README.txt", readme_content)
+            zip_file.writestr("ClassLink-AI-Service/README.txt", readme_content)
         
         zip_buffer.seek(0)
         
@@ -179,7 +188,7 @@ https://aistudio.google.com/app/apikey
             zip_buffer,
             media_type="application/zip",
             headers={
-                "Content-Disposition": "attachment; filename=ClassLink-PC-Installer.zip"
+                "Content-Disposition": "attachment; filename=ClassLink-AI-Service.zip"
             }
         )
         
