@@ -365,6 +365,8 @@ header {
 /* WiFi / List */
 .wifi-list {
     margin-top: 15px;
+    max-height: 400px;
+    overflow-y: auto;
 }
 
 .wifi-item {
@@ -500,6 +502,8 @@ header {
 .view-section.active {
     display: block;
     animation: fadeIn 0.3s ease;
+    height: calc(100vh - 120px);
+    overflow-y: auto;
 }
 
 @keyframes fadeIn {
