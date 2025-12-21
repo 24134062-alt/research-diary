@@ -262,3 +262,61 @@ async def connect_wifi(data: dict):
             "message": f"[Demo] Connected to {ssid}",
             "ssid": ssid
         }
+
+@router.post("/disconnect")
+async def disconnect_wifi():
+    """Disconnect from current WiFi and switch to AP mode"""
+    import platform
+    
+    if platform.system() != "Linux":
+        await asyncio.sleep(1)
+        return {
+            "status": "success",
+            "message": "[Demo] Disconnected and switched to AP mode",
+            "ap_ssid": "ClassLink-Setup",
+            "ap_url": "http://192.168.4.1:8000"
+        }
+    
+    try:
+        # Step 1: Disconnect from current WiFi
+        print("[WiFi] Disconnecting from current WiFi...")
+        subprocess.run(
+            ["sudo", "nmcli", "device", "disconnect", "wlan0"],
+            capture_output=True,
+            timeout=10
+        )
+        
+        # Step 2: Switch to AP mode
+        print("[WiFi] Switching to AP mode...")
+        ap_result = subprocess.run(
+            ["sudo", "/opt/classlink/net/box-ap-on"],
+            capture_output=True,
+            text=True,
+            timeout=30
+        )
+        
+        if ap_result.returncode == 0:
+            return {
+                "status": "success",
+                "message": "Đã ngắt WiFi và bật AP mode",
+                "ap_ssid": "ClassLink-Setup",
+                "ap_password": "classlink2024", 
+                "ap_url": "http://192.168.4.1:8000"
+            }
+        else:
+            error_msg = ap_result.stderr.strip() or ap_result.stdout.strip()
+            return {
+                "status": "error",
+                "message": f"Không thể bật AP mode: {error_msg}"
+            }
+            
+    except subprocess.TimeoutExpired:
+        return {
+            "status": "error",
+            "message": "Timeout khi chuyển đổi mạng"
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": f"Lỗi: {str(e)}"
+        }

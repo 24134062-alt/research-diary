@@ -402,22 +402,38 @@ function renderWiFiNetworks(networks) {
 
     container.innerHTML = networks.map(network => {
         const isConnected = currentConnectedSSID && network.ssid === currentConnectedSSID;
-        const buttonClass = isConnected ? 'btn-sm btn-connected' : 'btn-sm';
-        const buttonText = isConnected ? '✅ Đã kết nối' : 'Kết nối';
-        const buttonStyle = isConnected ? 'background: #22c55e; cursor: default;' : '';
-        const onclick = isConnected ? '' : `onclick="connectToWiFi('${network.ssid}', ${network.secure})"`;
 
+        if (isConnected) {
+            // Connected WiFi - show disconnect button
+            return `
+            <div class="wifi-item">
+                <div class="wifi-info">
+                    <h4>${getSignalIcon(network.signal)} ${network.ssid} <span style="color: #22c55e; font-size: 0.8em;">(Đang dùng)</span></h4>
+                    <small>
+                        ${getSignalBars(network.signal)}
+                        <span style="margin-left: 8px;">Signal: ${network.signal}%</span>
+                        ${network.secure ? '🔒 Secured' : '🔓 Open'}
+                    </small>
+                </div>
+                <button class="btn-sm" style="background: #ef4444;" onclick="showDisconnectModal()">
+                    <i class="fas fa-times"></i> Ngắt
+                </button>
+            </div>
+            `;
+        }
+
+        // Other WiFi - show connect button
         return `
-        <div class="wifi-item" ${onclick}>
+        <div class="wifi-item" onclick="connectToWiFi('${network.ssid}', ${network.secure})">
             <div class="wifi-info">
-                <h4>${getSignalIcon(network.signal)} ${network.ssid} ${isConnected ? '<span style="color: #22c55e; font-size: 0.8em;">(Đang dùng)</span>' : ''}</h4>
+                <h4>${getSignalIcon(network.signal)} ${network.ssid}</h4>
                 <small>
                     ${getSignalBars(network.signal)}
                     <span style="margin-left: 8px;">Signal: ${network.signal}%</span>
                     ${network.secure ? '🔒 Secured' : '🔓 Open'}
                 </small>
             </div>
-            <button class="${buttonClass}" style="${buttonStyle}" ${isConnected ? 'disabled' : ''}>${buttonText}</button>
+            <button class="btn-sm">Kết nối</button>
         </div>
     `}).join('');
 }
@@ -516,6 +532,72 @@ function copyNewUrl() {
 function closeNewIPModal() {
     const modal = document.getElementById('new-ip-modal');
     if (modal) modal.classList.remove('active');
+}
+
+// --- Disconnect WiFi with AP Mode Switch ---
+function showDisconnectModal() {
+    // Create modal if it doesn't exist
+    let modal = document.getElementById('disconnect-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'disconnect-modal';
+        modal.className = 'modal active';
+        modal.innerHTML = `
+            <div class="modal-content" style="text-align: center;">
+                <h3 style="color: #f59e0b;">⚠️ Ngắt kết nối WiFi?</h3>
+                <p style="color: var(--text-secondary);">
+                    Raspberry Pi sẽ chuyển sang chế độ Access Point.<br>
+                    Bạn cần kết nối lại WiFi để truy cập web.
+                </p>
+                <div style="background: #27272a; padding: 15px; border-radius: 8px; margin: 20px 0;">
+                    <p style="margin: 0 0 8px 0; color: white;"><strong>Thông tin kết nối mới:</strong></p>
+                    <p style="margin: 4px 0; color: var(--text-secondary);">📶 WiFi: <span style="color: #22c55e;">ClassLink-Setup</span></p>
+                    <p style="margin: 4px 0; color: var(--text-secondary);">🔑 Password: <span style="color: #22c55e;">classlink2024</span></p>
+                    <p style="margin: 4px 0; color: var(--text-secondary);">🌐 URL: <span style="color: #22c55e;">http://192.168.4.1:8000</span></p>
+                </div>
+                <div class="modal-actions" style="justify-content: center; gap: 12px;">
+                    <button class="btn-primary" style="background: #f59e0b;" onclick="confirmDisconnect()">
+                        <i class="fas fa-wifi"></i> Ngắt kết nối
+                    </button>
+                    <button class="btn-ghost" onclick="closeDisconnectModal()">Hủy</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+    } else {
+        modal.classList.add('active');
+    }
+}
+
+function closeDisconnectModal() {
+    const modal = document.getElementById('disconnect-modal');
+    if (modal) modal.classList.remove('active');
+}
+
+async function confirmDisconnect() {
+    closeDisconnectModal();
+    showToast('🔄 Đang ngắt kết nối và bật AP mode...', 'info');
+
+    try {
+        const res = await fetch(`${API_URL}/api/wifi/disconnect`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        const data = await res.json();
+
+        if (data.status === 'success') {
+            showToast(`✅ ${data.message}`, 'success');
+            // Show info about new connection
+            setTimeout(() => {
+                alert(`📶 Đã chuyển sang AP mode!\n\nKết nối WiFi: ${data.ap_ssid}\nPassword: ${data.ap_password || 'classlink2024'}\nURL: ${data.ap_url}`);
+            }, 1000);
+        } else {
+            showToast(`❌ ${data.message}`, 'error');
+        }
+    } catch (e) {
+        console.error("Disconnect failed", e);
+        showToast('❌ Lỗi ngắt kết nối.', 'error');
+    }
 }
 
 // --- WiFi Status & Failover ---
