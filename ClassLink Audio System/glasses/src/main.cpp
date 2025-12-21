@@ -240,7 +240,8 @@ void reconnectMQTT() {
     Serial.print("[MQTT] Connecting...");
     if (mqtt.connect("SmartGlasses")) {
       Serial.println(" Connected!");
-      mqtt.subscribe("glasses/text");  // Nhận text từ AI
+      mqtt.subscribe("glasses/text");  // Nhận text từ GV (khi AI off)
+      mqtt.subscribe("ai/answer");     // Nhận câu trả lời từ AI (khi AI on)
       mqtt.subscribe("audio/control"); // Nhận lệnh điều khiển
     } else {
       Serial.printf(" Failed (rc=%d)\n", mqtt.state());
@@ -258,9 +259,15 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
   }
   Serial.printf("[MQTT] %s: %s\n", topic, msg.c_str());
 
-  // Nhận text từ AI để hiển thị - đưa vào queue thay vì hiển thị trực tiếp
-  if (String(topic) == "glasses/text") {
-    queuePush(msg); // Thêm vào hàng đợi, không block
+  // Nhận text từ GV - CHỈ khi AI mode TẮT
+  // Khi AI mode BẬT, học sinh đang tập trung hỏi AI, không nhận text GV
+  if (String(topic) == "glasses/text" && !aiAssistantActive) {
+    queuePush(msg); // Thêm vào hàng đợi
+  }
+
+  // Nhận câu trả lời từ AI - LUÔN nhận (khi AI mode bật)
+  if (String(topic) == "ai/answer" && aiAssistantActive) {
+    queuePush(msg); // Hiển thị câu trả lời AI
   }
 
   // Nhận lệnh điều khiển
