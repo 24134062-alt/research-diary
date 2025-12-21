@@ -2,6 +2,32 @@
 
 All notable changes to ClassLink Audio System will be documented in this file.
 
+## [2024-12-21] - Glasses Display & Queue Improvements
+
+### Added (trong `glasses/src/main.cpp`)
+
+#### Text Display Improvements
+- **TextSize 2**: Chữ to hơn (12x16 pixels) cho hiển thị qua gương trong suốt
+- **Auto-scroll pagination**: Text dài tự động cuộn từng trang (2 giây/trang)
+- **Page indicator**: Hiển thị số trang (1/3, 2/3...) ở góc dưới phải
+
+#### Message Queue System
+- **Queue 10 messages**: Tin nhắn mới được xếp hàng đợi, không mất
+- **Non-blocking**: Nhận MQTT không block main loop
+- **processMessageQueue()**: Xử lý queue trong loop()
+
+#### AI Mode Text Filtering
+- **AI OFF**: Nhận text từ giáo viên (glasses/text)
+- **AI ON**: Chỉ nhận câu trả lời AI (ai/answer), không nhận text GV
+- Subscribe thêm topic `ai/answer`
+
+### Changed
+- `displayText()`: Sử dụng TextSize 2 thay vì 1
+- `mqttCallback()`: Đưa message vào queue thay vì hiển thị trực tiếp
+- Logic kiểm tra `aiAssistantActive` để lọc nguồn text
+
+---
+
 ## [2024-12-21] - Raspberry Pi Network Management Complete
 
 ### Added (trong `box/raspberry/`)
