@@ -136,13 +136,16 @@ async def get_system_info():
 async def download_pc_installer():
     """Download PC AI Service installer as ZIP"""
     try:
-        # Get ai_service directory (relative to project structure)
-        # box/raspberry/api -> go up 4 levels to ClassLink Audio System, then pc/ai_service
-        base_dir = Path(__file__).resolve().parent.parent.parent.parent.parent
-        ai_service_dir = base_dir / "pc" / "ai_service"
+        # Try absolute installation path first (production)
+        ai_service_dir = Path("/opt/classlink/pc/ai_service")
+        
+        # Fallback to relative path (development)
+        if not ai_service_dir.exists():
+            base_dir = Path(__file__).resolve().parent.parent.parent.parent.parent
+            ai_service_dir = base_dir / "pc" / "ai_service"
         
         if not ai_service_dir.exists():
-            raise HTTPException(status_code=404, detail="PC AI Service directory not found")
+            raise HTTPException(status_code=404, detail=f"PC AI Service directory not found at {ai_service_dir}")
         
         # Create ZIP in memory
         zip_buffer = io.BytesIO()
@@ -188,7 +191,7 @@ LƯU Ý:
             zip_buffer,
             media_type="application/zip",
             headers={
-                "Content-Disposition": "attachment; filename=ClassLink-AI-Service.zip"
+                "Content-Disposition": "attachment; filename=ClassLink-PC-Installer.zip"
             }
         )
         

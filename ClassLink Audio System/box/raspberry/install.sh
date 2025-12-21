@@ -110,6 +110,11 @@ if [ -f "$SCRIPT_DIR/config.example.yaml" ]; then
     cp "$SCRIPT_DIR/config.example.yaml" "$INSTALL_DIR/config/"
 fi
 
+# Copy PC AI Service (for download feature)
+log_info "Copy PC AI Service files..."
+mkdir -p "$INSTALL_DIR/pc"
+cp -r "$SCRIPT_DIR/../../pc/"* "$INSTALL_DIR/pc/"
+
 # Setup sudoers for WiFi control (allow pi to run nmcli without password)
 log_info "Cấu hình quyền WiFi cho user pi..."
 if [ -f "$SCRIPT_DIR/config/classlink-wifi-sudoers" ]; then
