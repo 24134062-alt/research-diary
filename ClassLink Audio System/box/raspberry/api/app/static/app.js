@@ -489,13 +489,16 @@ function showNewIPModal(ssid, newUrl) {
                     </div>
                 </div>
                 <div class="modal-actions" style="justify-content: center; gap: 12px;">
-                    <button class="btn-primary" onclick="copyNewUrl()">
-                        <i class="fas fa-copy"></i> Sao chép URL
+                    <button class="btn-primary" onclick="openNewUrl()">
+                        <i class="fas fa-external-link-alt"></i> Truy cập Web
+                    </button>
+                    <button class="btn-secondary" onclick="copyNewUrl()">
+                        <i class="fas fa-copy"></i> Sao chép
                     </button>
                     <button class="btn-ghost" onclick="closeNewIPModal()">Đóng</button>
                 </div>
                 <p style="margin-top: 15px; font-size: 0.85rem; color: var(--text-secondary);">
-                    ⚠️ Kết nối WiFi <span id="new-ssid-2" style="color: white;"></span> trên thiết bị của bạn, sau đó dán URL vào trình duyệt.
+                    ⚠️ Kết nối WiFi <span id="new-ssid-2" style="color: white;"></span> trên thiết bị của bạn trước khi truy cập.
                 </p>
             </div>
         `;
@@ -509,6 +512,15 @@ function showNewIPModal(ssid, newUrl) {
     document.getElementById('new-ssid-2').textContent = ssid;
     document.getElementById('new-url').textContent = newUrl;
     modal.dataset.url = newUrl;
+}
+
+function openNewUrl() {
+    const modal = document.getElementById('new-ip-modal');
+    const url = modal ? modal.dataset.url : '';
+    if (url) {
+        window.open(url, '_blank');
+        showToast('🌐 Đang mở trang web mới...', 'info');
+    }
 }
 
 function copyNewUrl() {
