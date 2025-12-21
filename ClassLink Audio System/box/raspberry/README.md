@@ -2,6 +2,12 @@
 
 Hướng dẫn cài đặt và cấu hình Raspberry Pi cho hệ thống ClassLink Audio System.
 
+## 🌐 Truy cập nhanh
+
+Sau khi cài đặt, kết nối WiFi **"ClassLink-Setup"** (password: `classlink2024`) và truy cập:
+
+> **http://classlink.local:8000**
+
 ## Mục lục
 
 - [Yêu cầu phần cứng](#yêu-cầu-phần-cứng)

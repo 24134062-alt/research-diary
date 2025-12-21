@@ -6,6 +6,7 @@
 # SSID: ClassLink-Setup
 # Password: classlink2024
 # IP: 192.168.4.1
+# Domain: http://classlink.local:8000
 ###############################################
 
 set -e
@@ -14,7 +15,8 @@ set -e
 AP_SSID="${CLASSLINK_AP_SSID:-ClassLink-Setup}"
 AP_PASS="${CLASSLINK_AP_PASS:-classlink2024}"
 AP_CON_NAME="ClassLink-Hotspot"
-AP_IP="192.168.4.1/24"
+AP_IP="192.168.4.1"
+AP_DOMAIN="classlink.local"
 
 # Colors for output
 RED='\033[0;31m'
@@ -43,6 +45,7 @@ fi
 log_info "Đang bật Access Point mode..."
 log_info "SSID: $AP_SSID"
 log_info "Password: $AP_PASS"
+log_info "Domain: $AP_DOMAIN"
 
 # Stop any existing hotspot with same name
 log_info "Dừng hotspot cũ (nếu có)..."
@@ -54,6 +57,27 @@ nmcli device disconnect wlan0 2>/dev/null || true
 
 # Wait a moment for interface to be ready
 sleep 1
+
+# Configure dnsmasq for local domain resolution
+log_info "Cấu hình DNS cho $AP_DOMAIN..."
+mkdir -p /etc/NetworkManager/dnsmasq-shared.d
+
+cat > /etc/NetworkManager/dnsmasq-shared.d/classlink.conf << EOF
+# ClassLink local domain configuration
+address=/$AP_DOMAIN/$AP_IP
+address=/setup.classlink/$AP_IP
+
+# DHCP range for connected clients
+dhcp-range=192.168.4.10,192.168.4.50,255.255.255.0,12h
+
+# Set gateway and DNS
+dhcp-option=3,$AP_IP
+dhcp-option=6,$AP_IP
+EOF
+
+# Set hostname
+log_info "Đặt hostname..."
+hostnamectl set-hostname classlink 2>/dev/null || true
 
 # Create and activate hotspot
 log_info "Tạo hotspot mới..."
@@ -67,7 +91,7 @@ nmcli connection add \
     wifi.band bg \
     wifi.channel 7 \
     ipv4.method shared \
-    ipv4.addresses "$AP_IP" \
+    ipv4.addresses "$AP_IP/24" \
     wifi-sec.key-mgmt wpa-psk \
     wifi-sec.psk "$AP_PASS"
 
@@ -83,12 +107,15 @@ if nmcli connection show --active | grep -q "$AP_CON_NAME"; then
     log_info "📶 Thông tin kết nối:"
     log_info "   SSID: $AP_SSID"
     log_info "   Password: $AP_PASS"
-    log_info "   IP: ${AP_IP%/*}"
+    log_info "   IP: $AP_IP"
     log_info ""
-    log_info "🌐 Truy cập web: http://${AP_IP%/*}:8000"
+    log_info "🌐 Truy cập web:"
+    log_info "   http://$AP_DOMAIN:8000  (khuyến nghị)"
+    log_info "   http://$AP_IP:8000"
     exit 0
 else
     log_error "❌ Không thể bật Access Point!"
     log_error "Kiểm tra log: journalctl -u NetworkManager -n 50"
     exit 1
 fi
+
