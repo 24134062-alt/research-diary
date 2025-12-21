@@ -393,61 +393,110 @@ void updateDisplay() {
   display.display();
 }
 
-// ====== Display Text from AI (Large + Scrolling) ======
-// TextSize 2: 12x16 px, ~10 ký tự/dòng, 4 dòng
-// Auto-scroll cho text dài
+// ====== Display Text with Typewriter Scroll Effect ======
+// Chữ hiện từng ký tự, khi hết màn hình thì scroll lên
 
 #define TEXT_SIZE 2
 #define CHARS_PER_LINE 10
 #define LINES_PER_SCREEN 4
-#define SCROLL_DELAY_MS 2000 // Thời gian hiển thị mỗi trang
+#define CHAR_DELAY_MS 80 // Delay giữa mỗi ký tự (80ms)
+
+// Buffer lưu các dòng đang hiển thị
+String displayLines[LINES_PER_SCREEN];
+int currentLineIdx = 0;
+String currentLineBuffer = "";
+
+void clearDisplayBuffer() {
+  for (int i = 0; i < LINES_PER_SCREEN; i++) {
+    displayLines[i] = "";
+  }
+  currentLineIdx = 0;
+  currentLineBuffer = "";
+}
+
+void scrollUpDisplay() {
+  // Đẩy tất cả dòng lên 1 bậc
+  for (int i = 0; i < LINES_PER_SCREEN - 1; i++) {
+    displayLines[i] = displayLines[i + 1];
+  }
+  displayLines[LINES_PER_SCREEN - 1] = "";
+}
+
+void refreshDisplayText() {
+  display.clearDisplay();
+  display.setTextSize(TEXT_SIZE);
+  display.setCursor(0, 0);
+
+  for (int i = 0; i < LINES_PER_SCREEN; i++) {
+    display.println(displayLines[i]);
+  }
+
+  display.display();
+}
 
 void displayText(const char *text) {
   String textStr = String(text);
-  int textLen = textStr.length();
 
-  // Tính số ký tự tối đa mỗi màn hình
-  int charsPerScreen = CHARS_PER_LINE * LINES_PER_SCREEN; // ~40 ký tự
+  Serial.printf("[DISPLAY] Text: %s\n", text);
 
-  // Nếu text ngắn, hiển thị thẳng
-  if (textLen <= charsPerScreen) {
-    display.clearDisplay();
-    display.setTextSize(TEXT_SIZE);
-    display.setTextWrap(true);
-    display.setCursor(0, 0);
-    display.println(text);
-    display.display();
-    delay(5000); // Hiển thị 5 giây
-    updateDisplay();
-    return;
+  clearDisplayBuffer();
+  refreshDisplayText();
+
+  // Tách thành các từ
+  int wordCount = 0;
+  String words[100];
+
+  int startIdx = 0;
+  for (int i = 0; i <= textStr.length(); i++) {
+    if (i == textStr.length() || textStr[i] == ' ') {
+      if (i > startIdx) {
+        words[wordCount++] = textStr.substring(startIdx, i);
+      }
+      startIdx = i + 1;
+    }
   }
 
-  // Text dài - cuộn từng trang
-  int totalPages = (textLen + charsPerScreen - 1) / charsPerScreen;
+  // Hiển thị từng từ với typewriter effect
+  for (int w = 0; w < wordCount; w++) {
+    String word = words[w];
 
-  for (int page = 0; page < totalPages; page++) {
-    display.clearDisplay();
-    display.setTextSize(TEXT_SIZE);
-    display.setTextWrap(true);
-    display.setCursor(0, 0);
+    // Kiểm tra xem từ có fit trên dòng hiện tại không
+    String testLine =
+        currentLineBuffer.length() == 0 ? word : currentLineBuffer + " " + word;
 
-    // Cắt đoạn text cho trang hiện tại
-    int startIdx = page * charsPerScreen;
-    int endIdx = min(startIdx + charsPerScreen, textLen);
-    String pageText = textStr.substring(startIdx, endIdx);
+    if (testLine.length() > CHARS_PER_LINE) {
+      // Không fit - lưu dòng hiện tại và xuống dòng mới
+      displayLines[currentLineIdx] = currentLineBuffer;
+      currentLineIdx++;
 
-    display.println(pageText);
+      // Nếu hết màn hình - scroll lên
+      if (currentLineIdx >= LINES_PER_SCREEN) {
+        scrollUpDisplay();
+        currentLineIdx = LINES_PER_SCREEN - 1;
+      }
 
-    // Hiển thị indicator trang (góc dưới phải)
-    display.setTextSize(1);
-    display.setCursor(100, 56);
-    display.print(page + 1);
-    display.print("/");
-    display.print(totalPages);
+      currentLineBuffer = "";
+    }
 
-    display.display();
-    delay(SCROLL_DELAY_MS);
+    // Thêm khoảng trắng nếu không phải đầu dòng
+    if (currentLineBuffer.length() > 0) {
+      currentLineBuffer += " ";
+      displayLines[currentLineIdx] = currentLineBuffer;
+      refreshDisplayText();
+      delay(CHAR_DELAY_MS);
+    }
+
+    // Hiển thị từng ký tự của từ
+    for (int c = 0; c < word.length(); c++) {
+      currentLineBuffer += word[c];
+      displayLines[currentLineIdx] = currentLineBuffer;
+      refreshDisplayText();
+      delay(CHAR_DELAY_MS);
+    }
   }
+
+  // Giữ màn hình 3 giây sau khi hiển thị xong
+  delay(3000);
 
   // Quay về màn hình status
   updateDisplay();
