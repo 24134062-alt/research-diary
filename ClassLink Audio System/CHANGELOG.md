@@ -2,6 +2,26 @@
 
 All notable changes to ClassLink Audio System will be documented in this file.
 
+## [2024-12-21] - PC AI Service & Web Improvements
+
+### Added (trong `pc/ai_service/`)
+
+#### Easy Installer for Windows
+- **install.bat**: Script cài đặt tự động (tạo venv, cài thư viện, tạo config)
+- **start.bat**: Script khởi động service
+- **Auto-Start**: Tự động thêm vào Windows Startup để chạy ngầm khi bật máy
+- **Hướng dẫn chi tiết**: README.txt đi kèm trong file ZIP tải về
+
+### Added (trong `box/raspberry/api/`)
+
+#### Web Dashboard Features
+- **Nút "Truy cập Web"**: Thay thế nút "Sao chép URL" trong modal WiFi
+    - Mở trực tiếp tab mới tới địa chỉ IP mới của Pi
+    - Nút sao chép vẫn giữ lại như tùy chọn phụ
+- **Fixed PC Installer**: Nút tải về giờ tải đúng folder `ai_service` chứa đầy đủ code và scripts
+
+---
+
 ## [2024-12-21] - WiFi Management Improvements
 
 ### Added (trong `box/raspberry/api/`)
