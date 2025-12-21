@@ -2,6 +2,31 @@
 
 All notable changes to ClassLink Audio System will be documented in this file.
 
+## [2024-12-21] - WiFi Management Improvements
+
+### Added (trong `box/raspberry/api/`)
+
+#### WiFi Connect with New IP Display
+- **Hiển thị URL mới**: Sau khi kết nối WiFi, hiện modal với URL mới
+- **Nút Sao chép**: Click để copy URL vào clipboard
+- **Thông báo chuyển mạng**: Hướng dẫn kết nối vào mạng mới
+
+#### WiFi Disconnect + Auto AP Mode  
+- **Nút "Ngắt" màu đỏ**: Bên cạnh WiFi đang kết nối
+- **Modal xác nhận**: Cảnh báo và hiển thị thông tin AP trước khi ngắt
+- **Tự động bật AP**: Sau khi ngắt WiFi → Bật ClassLink-Setup AP
+- **API `/api/wifi/disconnect`**: Endpoint mới cho disconnect
+
+#### Sudoers WiFi Permission
+- **classlink-wifi-sudoers**: Cho phép user `pi` chạy nmcli không cần password
+- **Fix lỗi connect**: Thêm `sudo` vào lệnh nmcli
+
+### Fixed
+- **Scroll panels**: WiFi list và Settings có thể cuộn được
+- **WiFi connect permission**: Sửa lỗi không có quyền kết nối WiFi
+
+---
+
 ## [2024-12-21] - Glasses Display & Queue Improvements
 
 ### Added (trong `glasses/src/main.cpp`)
