@@ -13,6 +13,10 @@ import io
 import time
 import paho.mqtt.client as mqtt
 import re
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -54,10 +58,16 @@ class AIService:
         self.mqtt_client = mqtt.Client()
         self.mqtt_client.on_connect = self.on_mqtt_connect
         self.mqtt_client.on_message = self.on_mqtt_message
+        
+        # Read MQTT settings from .env file
+        mqtt_host = os.getenv("MQTT_HOST", "localhost")
+        mqtt_port = int(os.getenv("MQTT_PORT", "1883"))
+        
         try:
-            self.mqtt_client.connect("localhost", 1883, 60)
+            logger.info(f"Connecting to MQTT Broker at {mqtt_host}:{mqtt_port}")
+            self.mqtt_client.connect(mqtt_host, mqtt_port, 60)
             self.mqtt_client.loop_start()
-            logger.info("Connected to MQTT Broker")
+            logger.info(f"Connected to MQTT Broker at {mqtt_host}:{mqtt_port}")
         except Exception as e:
             logger.warning(f"MQTT Connection failed: {e}")
         
