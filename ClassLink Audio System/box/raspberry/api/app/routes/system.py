@@ -203,15 +203,66 @@ LƯU Ý:
 
 @router.get("/pc-status")
 async def check_pc_status():
-    """Check if PC AI Service is connected (via MQTT if available)"""
-    # For now, return a simple status
-    # In production, this would check MQTT connection state
+    """Check if PC AI Service is connected by trying to reach it"""
+    import socket
+    
     try:
-        # Try to import mqtt service if available
-        # This is a placeholder - actual implementation would check MQTT topic
+        # Try to find PC on common ports
+        # PC AI Service typically listens on UDP port 12346
+        # We'll check if any device is listening
+        
+        # Method 1: Check MQTT service for recent PC heartbeat
+        # For now, try UDP ping to PC AI Service
+        
+        # Get gateway IP (likely where PC is)
+        try:
+            # Get default gateway
+            result = subprocess.run(
+                ["ip", "route", "show", "default"],
+                capture_output=True, text=True, timeout=5
+            )
+            gateway = None
+            if result.returncode == 0:
+                parts = result.stdout.split()
+                if "via" in parts:
+                    idx = parts.index("via")
+                    gateway = parts[idx + 1]
+            
+            if gateway:
+                # Try common PC IPs in the same subnet
+                base_ip = ".".join(gateway.split(".")[:3])
+                for last_octet in range(100, 110):  # Check .100-.109
+                    test_ip = f"{base_ip}.{last_octet}"
+                    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                    sock.settimeout(0.5)
+                    try:
+                        sock.sendto(b"ping", (test_ip, 12346))
+                        sock.close()
+                    except:
+                        sock.close()
+                        continue
+                    
+        except Exception as e:
+            pass
+        
+        # For now, check MQTT broker for connected clients
+        try:
+            result = subprocess.run(
+                ["mosquitto_sub", "-h", "localhost", "-t", "pc/status", "-C", "1", "-W", "2"],
+                capture_output=True, text=True, timeout=3
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                return {
+                    "connected": True,
+                    "message": "PC AI Service is connected",
+                    "status": result.stdout.strip()
+                }
+        except:
+            pass
+        
         return {
             "connected": False,
-            "message": "PC Service status check. Run installer on PC to connect."
+            "message": "PC Service chưa kết nối. Hãy chạy installer!"
         }
     except Exception as e:
         return {
