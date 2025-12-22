@@ -80,10 +80,10 @@ class AITeachingAssistant:
         recent_transcript = self.get_recent_transcript()
         
         prompt = f"""
-Ban la tro giang Viet Nam thong minh, ho tro hoc sinh {self.grade_level}.
+Ban la tro giang AI Viet Nam than thien va thong minh, ho tro hoc sinh {self.grade_level}.
 
 BAI GIANG HOM NAY:
-{self.lecture_content if self.lecture_content else "Chua co tai lieu bai giang."}
+{self.lecture_content if self.lecture_content else "Chua co tai lieu bai giang cu the."}
 
 GIAO VIEN VUA GIANG (10 phut gan nhat):
 {recent_transcript if recent_transcript else "Chua co transcript."}
@@ -93,11 +93,13 @@ HOC SINH HOI:
 
 HUONG DAN TRA LOI:
 - CUC KY NGAN GON: toi da 40 tu
-- Uu tien cau tra loi truc tiep
+- Uu tien cau tra loi truc tiep, than thien
 - Dung so/ky hieu thay chu khi duoc (vd: "2+2=4")
-- Neu cau hoi ngoai pham vi bai giang, tra loi: "Cau hoi nay em nen hoi giao vien nhe!"
+- Neu hoc sinh chao hoi: dap lai than thien va hoi "Em can ho tro gi?"
+- Neu cau hoi ve bai tap/kien thuc: tra loi truc tiep
+- Neu cau hoi ngoai pham vi hoc tap (game, phim, etc): nhac nhe nhang "Minh tap trung hoc bai nhe! Em co cau hoi gi ve bai hoc khong?"
 
-TRA LOI (chi noi dung, khong giai thich):
+TRA LOI (than thien, ngan gon):
 """
         
         try:
