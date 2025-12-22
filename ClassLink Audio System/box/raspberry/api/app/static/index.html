@@ -264,18 +264,43 @@
                     </div>
 
                     <div class="chat-input-area">
+                        <!-- Broadcast Section -->
+                        <div
+                            style="background: rgba(251, 146, 60, 0.1); border: 1px solid #fb923c; border-radius: 8px; padding: 12px; margin-bottom: 12px;">
+                            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                                <i class="fas fa-bullhorn" style="color: #fb923c;"></i>
+                                <span style="color: #fb923c; font-weight: 600; font-size: 0.85rem;">📢 Broadcast TTS
+                                    (Gửi thẳng tới kính)</span>
+                            </div>
+                            <div style="display: flex; gap: 8px;">
+                                <input type="text" id="broadcast-input"
+                                    placeholder="Nhập thông báo gửi tới tất cả học sinh..."
+                                    style="flex: 1; padding: 10px 12px; background: #18181b; border: 1px solid #3f3f46; border-radius: 6px; color: white;"
+                                    onkeypress="if(event.key==='Enter') sendBroadcast()">
+                                <button class="btn-primary" onclick="sendBroadcast()"
+                                    style="background: #fb923c; padding: 10px 16px;">
+                                    <i class="fas fa-volume-up"></i> Gửi TTS
+                                </button>
+                            </div>
+                            <div style="margin-top: 8px; display: flex; gap: 6px;">
+                                <button class="chip" onclick="setBroadcast('Trật tự nào các em')"
+                                    style="background: #27272a; font-size: 0.75rem;">Trật tự</button>
+                                <button class="chip" onclick="setBroadcast('Giờ ra chơi rồi các em')"
+                                    style="background: #27272a; font-size: 0.75rem;">Ra chơi</button>
+                                <button class="chip" onclick="setBroadcast('Tập trung nghe giảng nào')"
+                                    style="background: #27272a; font-size: 0.75rem;">Tập trung</button>
+                            </div>
+                        </div>
+
+                        <!-- AI Chat Section -->
                         <div style="margin-bottom: 8px; font-size: 0.75rem; color: #71717a; font-style: italic;">
-                            <i class="fas fa-info-circle"></i> AI chỉ phản hồi khi được giáo viên kích hoạt
+                            <i class="fas fa-robot"></i> Chat với AI Trợ Giảng (hỏi đáp học tập)
                         </div>
                         <div class="input-wrapper">
-                            <input type="text" id="chat-input" placeholder="Gửi phản hồi AI tới học sinh (TTS)..."
+                            <input type="text" id="chat-input" placeholder="Hỏi AI về bài học, công thức, kiến thức..."
                                 onkeypress="handleEnter(event)">
                             <button class="btn-primary" onclick="sendMessage()"><i
                                     class="fas fa-paper-plane"></i></button>
-                        </div>
-                        <div class="quick-actions">
-                            <button class="chip" onclick="fillChat('Tắt micro tất cả', '')">Tắt Mic</button>
-                            <button class="chip" onclick="fillChat('Trật tự nào các em', '')">Nhắc trật tự</button>
                         </div>
                     </div>
                 </div>

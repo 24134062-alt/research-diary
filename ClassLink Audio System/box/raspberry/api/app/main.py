@@ -90,6 +90,36 @@ async def get_chat_history():
     """Get recent chat logs (organized by session)"""
     return mqtt_service.sessions
 
+@app.post("/api/broadcast")
+async def broadcast_tts(data: dict):
+    """Send TTS broadcast directly to all connected glasses"""
+    text = data.get("text", "").strip()
+    
+    if not text:
+        return {"status": "error", "message": "No text provided"}
+    
+    # Check if any glasses are connected
+    glasses_devices = [d for d in mqtt_service.registry.get_all_devices().values() 
+                       if d.get("type") == "glasses" and d.get("status") == "online"]
+    
+    if not glasses_devices:
+        return {"status": "no_glasses", "message": "Chưa có kính nào kết nối"}
+    
+    # Send TTS to all glasses via MQTT
+    mqtt_service.publish("glasses/tts", {
+        "text": text,
+        "source": "teacher_broadcast"
+    })
+    
+    # Log to broadcast channel
+    mqtt_service.add_chat_log("broadcast", "teacher", f"📢 Broadcast: {text}")
+    
+    return {
+        "status": "sent",
+        "text": text,
+        "glasses_count": len(glasses_devices)
+    }
+
 # WiFi connect route moved to routes/setup_wifi.py
 
 if __name__ == "__main__":

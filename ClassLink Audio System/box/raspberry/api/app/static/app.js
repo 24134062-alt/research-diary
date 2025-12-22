@@ -299,6 +299,48 @@ function scrollToBottom() {
     if (container) container.scrollTop = container.scrollHeight;
 }
 
+// --- Broadcast TTS Functions ---
+function setBroadcast(text) {
+    const input = document.getElementById('broadcast-input');
+    if (input) {
+        input.value = text;
+        input.focus();
+    }
+}
+
+async function sendBroadcast() {
+    const input = document.getElementById('broadcast-input');
+    const text = input.value.trim();
+    if (!text) {
+        showToast('❌ Vui lòng nhập nội dung thông báo!', 'warning');
+        return;
+    }
+
+    try {
+        showToast('📢 Đang gửi broadcast...', 'info');
+
+        const response = await fetch(`${API_URL}/api/broadcast`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text: text })
+        });
+
+        const result = await response.json();
+
+        if (result.status === 'sent') {
+            showToast('✅ Đã gửi TTS tới tất cả kính!', 'success');
+            input.value = '';
+        } else if (result.status === 'no_glasses') {
+            showToast('⚠️ Chưa có kính nào kết nối!', 'warning');
+        } else {
+            showToast(`❌ ${result.message || 'Lỗi gửi broadcast'}`, 'error');
+        }
+    } catch (e) {
+        console.error('Broadcast failed:', e);
+        showToast('❌ Lỗi kết nối. Thử lại sau.', 'error');
+    }
+}
+
 // --- Mic Remote Transcription ---
 function clearMicTranscription() {
     const area = document.getElementById('mic-transcription-area');
