@@ -14,6 +14,19 @@ All notable changes to ClassLink Audio System will be documented in this file.
   - Cấu hình cho phép kết nối anonymous từ local network
   - Enable persistence để lưu trữ messages
   - Auto-start khi boot
+
+#### Rescue Mode (Chống mất kết nối)
+- **rescue-mode.sh**: Script giám sát và tự động khắc phục mất kết nối
+  - Chạy mỗi 2 phút qua systemd timer
+  - Đảm bảo SSH luôn hoạt động
+  - Tự động bật AP mode nếu mất WiFi
+- **box-rescue.service** & **box-rescue.timer**: Systemd units cho rescue mode
+
+### Fixed
+
+#### Lỗi mất kết nối SSH đột ngột
+- **Nguyên nhân**: NetworkManager restart hoặc service crash
+- **Giải pháp**: Rescue mode timer giám sát và tự động khắc phục
   - Vô hiệu hóa (`mask`) các dịch vụ xung đột: `hostapd`, `dnsmasq`, `dhcpcd`
   - Thiết lập WiFi Country Code (VN) để kích hoạt phần cứng radio
   - Dọn dẹp cấu hình cũ trong `/etc/dhcpcd.conf`

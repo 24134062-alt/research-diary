@@ -1,0 +1,10 @@
+[Unit]
+Description=ClassLink Rescue Mode Timer - Run every 2 minutes
+
+[Timer]
+OnBootSec=30
+OnUnitActiveSec=2min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

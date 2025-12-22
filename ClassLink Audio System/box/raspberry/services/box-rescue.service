@@ -1,0 +1,10 @@
+[Unit]
+Description=ClassLink Rescue Mode - Ensure network connectivity
+After=network.target NetworkManager.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/classlink/rescue-mode.sh
+
+[Install]
+WantedBy=multi-user.target

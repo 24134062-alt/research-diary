@@ -158,6 +158,42 @@ log_info "Enable services..."
 systemctl enable box-net.service
 systemctl enable box-api.service
 systemctl enable box-watchdog.timer 2>/dev/null || true
+systemctl enable box-rescue.timer 2>/dev/null || true
+
+# ============================================
+log_section "7/7 - Cài đặt MQTT Broker & WiFi Fixes"
+# ============================================
+
+# Install Mosquitto MQTT Broker
+log_info "Cài đặt Mosquitto MQTT Broker..."
+apt install -y mosquitto mosquitto-clients
+
+# Configure Mosquitto
+mkdir -p /etc/mosquitto/conf.d
+cat > /etc/mosquitto/conf.d/classlink.conf << 'EOF'
+listener 1883
+allow_anonymous true
+persistence true
+persistence_location /var/lib/mosquitto/
+EOF
+
+systemctl enable mosquitto
+systemctl restart mosquitto
+log_info "Mosquitto MQTT Broker đã được cài đặt"
+
+# Run WiFi fixes
+log_info "Khắc phục cấu hình WiFi..."
+if [ -f "$SCRIPT_DIR/fix-wifi.sh" ]; then
+    chmod +x "$SCRIPT_DIR/fix-wifi.sh"
+    bash "$SCRIPT_DIR/fix-wifi.sh" || true
+fi
+
+# Copy rescue script
+log_info "Cài đặt Rescue Mode..."
+if [ -f "$SCRIPT_DIR/rescue-mode.sh" ]; then
+    cp "$SCRIPT_DIR/rescue-mode.sh" "$INSTALL_DIR/"
+    chmod +x "$INSTALL_DIR/rescue-mode.sh"
+fi
 
 # ============================================
 log_section "Hoàn tất!"
