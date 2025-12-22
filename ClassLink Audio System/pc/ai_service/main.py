@@ -2,6 +2,7 @@ import asyncio
 import socket
 import struct
 import logging
+import json
 import speech_recognition as sr
 from concurrent.futures import ThreadPoolExecutor
 from ai_assistant import AITeachingAssistant
