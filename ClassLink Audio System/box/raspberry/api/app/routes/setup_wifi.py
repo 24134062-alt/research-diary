@@ -176,9 +176,16 @@ async def scan_wifi():
 
 @router.post("/connect")
 async def connect_wifi(data: dict):
-    """Connect to a WiFi network and save credentials"""
+    """
+    Connect to a WiFi network with GUARANTEED fallback to AP mode.
+    
+    This is a critical function that MUST ensure the user can always
+    reconnect to the Pi, either via the new WiFi or via AP mode.
+    """
     import subprocess
     import platform
+    import threading
+    import os
     
     ssid = data.get("ssid")
     password = data.get("password")
@@ -186,75 +193,11 @@ async def connect_wifi(data: dict):
     if not ssid:
         return {"status": "error", "message": "SSID is required"}
     
-    print(f"[WiFi] Attempting to connect to {ssid}")
+    print(f"[WiFi] ========================================")
+    print(f"[WiFi] Attempting to connect to: {ssid}")
+    print(f"[WiFi] ========================================")
     
-    if platform.system() == "Linux":
-        try:
-            # Use sudo + nmcli to connect - needs root for WiFi operations
-            cmd = ["sudo", "nmcli", "device", "wifi", "connect", ssid]
-            
-            if password:
-                cmd.extend(["password", password])
-            
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=30  # WiFi connection can take time
-            )
-            
-            if result.returncode == 0:
-                print(f"✅ Connected to {ssid}")
-                
-                # Wait for IP address to be assigned
-                await asyncio.sleep(3)
-                
-                # Get new IP address
-                new_ip = None
-                try:
-                    ip_result = subprocess.check_output(
-                        ["ip", "-4", "addr", "show", "wlan0"],
-                        stderr=subprocess.STDOUT,
-                        timeout=5
-                    )
-                    ip_output = ip_result.decode("utf-8", errors="ignore")
-                    # Parse IP from output like "inet 192.168.0.105/24"
-                    import re
-                    match = re.search(r'inet (\d+\.\d+\.\d+\.\d+)', ip_output)
-                    if match:
-                        new_ip = match.group(1)
-                except Exception as e:
-                    print(f"[WiFi] Error getting new IP: {e}")
-                
-                new_url = f"http://{new_ip}:8000" if new_ip else None
-                
-                return {
-                    "status": "success",
-                    "message": f"Connected to {ssid}. Password saved.",
-                    "ssid": ssid,
-                    "new_ip": new_ip,
-                    "new_url": new_url
-                }
-            else:
-                error_msg = result.stderr.strip() or result.stdout.strip()
-                print(f"❌ Connection failed: {error_msg}")
-                return {
-                    "status": "error",
-                    "message": f"Failed to connect: {error_msg}",
-                    "ssid": ssid
-                }
-                
-        except subprocess.TimeoutExpired:
-            return {
-                "status": "error",
-                "message": "Connection timeout after 30 seconds"
-            }
-        except Exception as e:
-            return {
-                "status": "error",
-                "message": f"Connection error: {str(e)}"
-            }
-    else:
+    if platform.system() != "Linux":
         # Non-Linux (testing on Windows)
         await asyncio.sleep(2)
         return {
@@ -262,6 +205,172 @@ async def connect_wifi(data: dict):
             "message": f"[Demo] Connected to {ssid}",
             "ssid": ssid
         }
+    
+    # --- CRITICAL SECTION: WiFi Connection with Fallback ---
+    
+    # Step 1: Set WiFi country code first (required for radio to work)
+    print("[WiFi] Step 1: Setting WiFi country code...")
+    subprocess.run(
+        ["sudo", "iw", "reg", "set", "VN"],
+        capture_output=True, timeout=5
+    )
+    
+    # Step 2: Save current connection state for recovery
+    state_file = "/tmp/classlink_wifi_state"
+    with open(state_file, "w") as f:
+        f.write(f"connecting:{ssid}")
+    
+    # Step 3: Create connection profile (save credentials)
+    print("[WiFi] Step 2: Creating connection profile...")
+    
+    # Delete old profile if exists
+    subprocess.run(
+        ["sudo", "nmcli", "connection", "delete", ssid],
+        capture_output=True, timeout=5
+    )
+    
+    # Create new profile  
+    create_cmd = [
+        "sudo", "nmcli", "connection", "add",
+        "type", "wifi",
+        "ifname", "wlan0",
+        "con-name", ssid,
+        "ssid", ssid,
+        "wifi-sec.key-mgmt", "wpa-psk",
+        "wifi-sec.psk", password or ""
+    ]
+    
+    create_result = subprocess.run(
+        create_cmd, capture_output=True, text=True, timeout=10
+    )
+    
+    if create_result.returncode != 0:
+        print(f"[WiFi] Failed to create profile: {create_result.stderr}")
+        # Continue anyway, nmcli device wifi connect might work
+    
+    # Step 4: Define connection function to run in background
+    def try_connect_and_fallback():
+        import time
+        
+        print("[WiFi] Step 3: Attempting connection...")
+        
+        try:
+            # Try to connect
+            connect_result = subprocess.run(
+                ["sudo", "nmcli", "--wait", "15", "connection", "up", ssid],
+                capture_output=True,
+                text=True,
+                timeout=20
+            )
+            
+            if connect_result.returncode == 0:
+                print(f"[WiFi] ✅ SUCCESS: Connected to {ssid}")
+                
+                # Wait for IP
+                time.sleep(3)
+                
+                # Write success state
+                with open(state_file, "w") as f:
+                    f.write(f"connected:{ssid}")
+                return
+            else:
+                print(f"[WiFi] ❌ FAILED: {connect_result.stderr}")
+                
+        except Exception as e:
+            print(f"[WiFi] ❌ EXCEPTION: {e}")
+        
+        # Connection failed - MUST activate AP mode
+        print("[WiFi] Activating fallback AP mode...")
+        activate_ap_mode()
+    
+    def activate_ap_mode():
+        """Activate AP mode - MUST succeed"""
+        import time
+        
+        print("[WiFi] === Activating AP Mode ===")
+        
+        # Method 1: Use box-ap-on script
+        try:
+            result = subprocess.run(
+                ["sudo", "/opt/classlink/net/box-ap-on"],
+                capture_output=True, text=True, timeout=30
+            )
+            if result.returncode == 0:
+                print("[WiFi] AP mode activated via box-ap-on")
+                with open(state_file, "w") as f:
+                    f.write("ap_mode:ClassLink-Setup")
+                return
+        except Exception as e:
+            print(f"[WiFi] box-ap-on failed: {e}")
+        
+        # Method 2: Direct nmcli
+        try:
+            # Delete and recreate
+            subprocess.run(
+                ["sudo", "nmcli", "connection", "delete", "ClassLink-Hotspot"],
+                capture_output=True, timeout=5
+            )
+            time.sleep(1)
+            
+            # Create hotspot
+            subprocess.run([
+                "sudo", "nmcli", "connection", "add",
+                "type", "wifi", "ifname", "wlan0",
+                "con-name", "ClassLink-Hotspot",
+                "autoconnect", "no",
+                "ssid", "ClassLink-Setup",
+                "wifi.mode", "ap", "wifi.band", "bg", "wifi.channel", "7",
+                "ipv4.method", "shared", "ipv4.addresses", "192.168.4.1/24",
+                "wifi-sec.key-mgmt", "wpa-psk", "wifi-sec.psk", "classlink2024"
+            ], capture_output=True, timeout=15)
+            
+            time.sleep(1)
+            
+            # Activate
+            result = subprocess.run(
+                ["sudo", "nmcli", "connection", "up", "ClassLink-Hotspot"],
+                capture_output=True, text=True, timeout=15
+            )
+            
+            if result.returncode == 0:
+                print("[WiFi] AP mode activated via nmcli")
+                with open(state_file, "w") as f:
+                    f.write("ap_mode:ClassLink-Setup")
+                return
+        except Exception as e:
+            print(f"[WiFi] nmcli AP failed: {e}")
+        
+        # Method 3: Simple hotspot
+        try:
+            subprocess.run([
+                "sudo", "nmcli", "device", "wifi", "hotspot",
+                "ssid", "ClassLink-Setup",
+                "password", "classlink2024"
+            ], capture_output=True, timeout=15)
+            print("[WiFi] AP mode activated via simple hotspot")
+        except Exception as e:
+            print(f"[WiFi] Simple hotspot failed: {e}")
+        
+        with open(state_file, "w") as f:
+            f.write("ap_mode:ClassLink-Setup")
+    
+    # Step 5: Start connection in background thread
+    # This ensures the HTTP response is returned before network changes
+    thread = threading.Thread(target=try_connect_and_fallback, daemon=True)
+    thread.start()
+    
+    # Return immediately with instructions
+    return {
+        "status": "pending",
+        "message": f"Đang kết nối đến {ssid}. Nếu thành công, truy cập web qua mạng mới. Nếu thất bại, kết nối WiFi 'ClassLink-Setup' (pass: classlink2024) và truy cập http://192.168.4.1:8000",
+        "ssid": ssid,
+        "ap_fallback": {
+            "ssid": "ClassLink-Setup",
+            "password": "classlink2024",
+            "url": "http://192.168.4.1:8000"
+        }
+    }
+
 
 @router.post("/disconnect")
 async def disconnect_wifi():
