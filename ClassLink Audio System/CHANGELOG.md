@@ -2,12 +2,18 @@
 
 All notable changes to ClassLink Audio System will be documented in this file.
 
-## [2024-12-22] - WiFi Network Stability Fixes
+## [2024-12-22] - WiFi Network Stability Fixes & MQTT Setup
 
 ### Added (trong `box/raspberry/`)
 
 #### WiFi Fix Script
-- **fix-wifi.sh**: Script khắc phục toàn bộ các lỗi WiFi phổ biến:
+- **fix-wifi.sh**: Script khắc phục toàn bộ các lỗi WiFi phổ biến
+
+#### MQTT Broker Setup
+- **setup-mqtt.sh**: Script cài đặt Mosquitto MQTT Broker trên Raspberry Pi
+  - Cấu hình cho phép kết nối anonymous từ local network
+  - Enable persistence để lưu trữ messages
+  - Auto-start khi boot
   - Vô hiệu hóa (`mask`) các dịch vụ xung đột: `hostapd`, `dnsmasq`, `dhcpcd`
   - Thiết lập WiFi Country Code (VN) để kích hoạt phần cứng radio
   - Dọn dẹp cấu hình cũ trong `/etc/dhcpcd.conf`

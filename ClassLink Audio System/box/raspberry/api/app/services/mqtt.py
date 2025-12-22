@@ -46,7 +46,7 @@ class MQTTService:
             self.client = mqtt.Client()
             self.client.on_connect = self.on_connect
             self.client.on_message = self.on_message
-            self.broker = "test.mosquitto.org" # Or local "localhost"
+            self.broker = "localhost"  # Local Mosquitto broker on Raspberry Pi
             self.port = 1883
         else:
             self.client = None
