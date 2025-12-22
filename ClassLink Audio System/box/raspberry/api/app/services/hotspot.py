@@ -9,7 +9,7 @@ import time
 class HotspotController:
     def __init__(self):
         self.hotspot_ssid = "ClassLink-Setup"
-        self.hotspot_password = "12345678"
+        self.hotspot_password = "classlink2024"  # Fixed: was 12345678
         self.connection_name = "ClassLink-Hotspot"
         self.is_ap_mode = False
     
