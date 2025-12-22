@@ -2,7 +2,51 @@
 
 All notable changes to ClassLink Audio System will be documented in this file.
 
+## [2024-12-22] - WiFi Network Stability Fixes
+
+### Added (trong `box/raspberry/`)
+
+#### WiFi Fix Script
+- **fix-wifi.sh**: Script khắc phục toàn bộ các lỗi WiFi phổ biến:
+  - Vô hiệu hóa (`mask`) các dịch vụ xung đột: `hostapd`, `dnsmasq`, `dhcpcd`
+  - Thiết lập WiFi Country Code (VN) để kích hoạt phần cứng radio
+  - Dọn dẹp cấu hình cũ trong `/etc/dhcpcd.conf`
+  - Unblock WiFi qua `rfkill`
+  - Chuẩn hóa dùng `NetworkManager` làm trình quản lý duy nhất
+
+### Fixed
+
+#### Lỗi WiFi ẩn hiện (Flapping)
+- **Nguyên nhân**: `hostapd` và `NetworkManager` tranh giành quyền điều khiển card WiFi
+- **Giải pháp**: Mask `hostapd` để chỉ `NetworkManager` quản lý
+
+#### Lỗi Web bị kẹt Loading
+- **Nguyên nhân**: `dhcpcd` và `NetworkManager` xung đột cấp phát IP/DNS
+- **Giải pháp**: Disable `dhcpcd`, xóa cấu hình `wlan0` cũ
+
+#### Lỗi không thể đổi WiFi
+- **Nguyên nhân**: Script `box-ap-on` thất bại khi hotspot profile bị broken
+- **Giải pháp**: Cải thiện `setup_wifi.py` với fallback logic:
+  - Xóa hotspot profile cũ trước khi tạo mới
+  - Thử nhiều phương pháp tạo hotspot (script → nmcli connection add → nmcli hotspot)
+  - Retry mechanism khi activate thất bại
+
+### HƯỚNG DẪN KHẮC PHỤC
+
+```bash
+# Copy fix-wifi.sh sang Raspberry Pi
+scp fix-wifi.sh pi@<IP>:~/
+
+# SSH vào Pi và chạy
+chmod +x ~/fix-wifi.sh
+sudo ~/fix-wifi.sh
+sudo reboot
+```
+
+---
+
 ## [2024-12-21] - PC AI Service & Web Improvements
+
 
 ### Added (trong `pc/ai_service/`)
 

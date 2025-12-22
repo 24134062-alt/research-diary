@@ -286,8 +286,20 @@ async def disconnect_wifi():
             timeout=10
         )
         
-        # Step 2: Switch to AP mode
-        print("[WiFi] Switching to AP mode...")
+        await asyncio.sleep(1)
+        
+        # Step 2: Delete old hotspot if exists
+        print("[WiFi] Removing old hotspot profile...")
+        subprocess.run(
+            ["sudo", "nmcli", "connection", "delete", "ClassLink-Hotspot"],
+            capture_output=True,
+            timeout=5
+        )
+        
+        await asyncio.sleep(1)
+        
+        # Step 3: Try using box-ap-on script first
+        print("[WiFi] Trying box-ap-on script...")
         ap_result = subprocess.run(
             ["sudo", "/opt/classlink/net/box-ap-on"],
             capture_output=True,
@@ -303,11 +315,66 @@ async def disconnect_wifi():
                 "ap_password": "classlink2024", 
                 "ap_url": "http://192.168.4.1:8000"
             }
+        
+        # Step 4: Fallback - create hotspot directly with nmcli
+        print("[WiFi] box-ap-on failed, using fallback method...")
+        
+        # Create hotspot directly
+        create_result = subprocess.run([
+            "sudo", "nmcli", "connection", "add",
+            "type", "wifi",
+            "ifname", "wlan0",
+            "con-name", "ClassLink-Hotspot",
+            "autoconnect", "no",
+            "ssid", "ClassLink-Setup",
+            "wifi.mode", "ap",
+            "wifi.band", "bg",
+            "wifi.channel", "7",
+            "ipv4.method", "shared",
+            "ipv4.addresses", "192.168.4.1/24",
+            "wifi-sec.key-mgmt", "wpa-psk",
+            "wifi-sec.psk", "classlink2024"
+        ], capture_output=True, text=True, timeout=15)
+        
+        if create_result.returncode != 0:
+            # Try simpler hotspot command
+            print("[WiFi] Trying simple hotspot command...")
+            subprocess.run([
+                "sudo", "nmcli", "device", "wifi", "hotspot",
+                "ssid", "ClassLink-Setup",
+                "password", "classlink2024"
+            ], capture_output=True, text=True, timeout=15)
+        
+        # Activate hotspot
+        await asyncio.sleep(1)
+        activate_result = subprocess.run(
+            ["sudo", "nmcli", "connection", "up", "ClassLink-Hotspot"],
+            capture_output=True,
+            text=True,
+            timeout=15
+        )
+        
+        # Verify hotspot is active
+        await asyncio.sleep(2)
+        check_result = subprocess.run(
+            ["nmcli", "connection", "show", "--active"],
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+        
+        if "ClassLink-Hotspot" in check_result.stdout or "Hotspot" in check_result.stdout:
+            return {
+                "status": "success",
+                "message": "Đã ngắt WiFi và bật AP mode (fallback)",
+                "ap_ssid": "ClassLink-Setup",
+                "ap_password": "classlink2024", 
+                "ap_url": "http://192.168.4.1:8000"
+            }
         else:
-            error_msg = ap_result.stderr.strip() or ap_result.stdout.strip()
             return {
                 "status": "error",
-                "message": f"Không thể bật AP mode: {error_msg}"
+                "message": "Không thể bật AP mode. Vui lòng chạy: sudo /opt/classlink/net/box-ap-on"
             }
             
     except subprocess.TimeoutExpired:
@@ -320,3 +387,4 @@ async def disconnect_wifi():
             "status": "error",
             "message": f"Lỗi: {str(e)}"
         }
+
