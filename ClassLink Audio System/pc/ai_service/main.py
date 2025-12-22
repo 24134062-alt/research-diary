@@ -58,6 +58,7 @@ class AIService:
         self.mqtt_client = mqtt.Client()
         self.mqtt_client.on_connect = self.on_mqtt_connect
         self.mqtt_client.on_message = self.on_mqtt_message
+        self.mqtt_connected = False
         
         # Read MQTT settings from .env file
         mqtt_host = os.getenv("MQTT_HOST", "localhost")
@@ -67,6 +68,7 @@ class AIService:
             logger.info(f"Connecting to MQTT Broker at {mqtt_host}:{mqtt_port}")
             self.mqtt_client.connect(mqtt_host, mqtt_port, 60)
             self.mqtt_client.loop_start()
+            self.mqtt_connected = True
             logger.info(f"Connected to MQTT Broker at {mqtt_host}:{mqtt_port}")
         except Exception as e:
             logger.warning(f"MQTT Connection failed: {e}")
@@ -78,6 +80,26 @@ class AIService:
         logger.info("Subscribing to teacher/subject and teacher/chat/request")
         client.subscribe("teacher/subject")
         client.subscribe("teacher/chat/request")
+        # Start heartbeat
+        self._send_heartbeat()
+    
+    def _send_heartbeat(self):
+        """Send heartbeat to Pi every 10 seconds"""
+        import threading
+        if self.mqtt_connected:
+            try:
+                heartbeat_data = json.dumps({
+                    "status": "online",
+                    "timestamp": time.time()
+                })
+                self.mqtt_client.publish("pc/status", heartbeat_data)
+            except Exception as e:
+                logger.error(f"Heartbeat failed: {e}")
+        
+        # Schedule next heartbeat
+        timer = threading.Timer(10.0, self._send_heartbeat)
+        timer.daemon = True
+        timer.start()
 
     def on_mqtt_message(self, client, userdata, msg):
         try:

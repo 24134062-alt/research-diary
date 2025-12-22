@@ -28,6 +28,9 @@ class MQTTService:
         # New: Chat & Monitoring
         client.subscribe("teacher/chat/response") # Response from AI
         client.subscribe("student/query/log")     # Logs from student interactions
+        
+        # PC AI Service heartbeat
+        client.subscribe("pc/status")
 
     def __init__(self):
         # Initialize registry and router (always needed)
@@ -40,6 +43,9 @@ class MQTTService:
             "broadcast": [] # System/Broadcast channel
         }
         self.max_history_per_session = 50
+        
+        # PC AI Service status tracking
+        self.pc_last_heartbeat = None  # Timestamp of last PC heartbeat
         
         # Initialize MQTT client only if library is available
         if MQTT_AVAILABLE:
@@ -87,6 +93,12 @@ class MQTTService:
                     self.sessions[student_id] = []
                     
                 self.add_chat_log(student_id, "student_log", f"Q: {question}\nA: {answer}")
+            
+            elif topic == "pc/status":
+                # PC AI Service heartbeat
+                import time
+                self.pc_last_heartbeat = time.time()
+                print(f"💓 PC AI Service heartbeat received")
 
         except json.JSONDecodeError:
             print("Failed to decode JSON payload")
@@ -144,3 +156,10 @@ class MQTTService:
                 print(f"⚠️  MQTT connection failed: {e}. Running in standalone mode.")
         else:
             print("📡 MQTT service running in DEMO mode - no broker connection")
+    
+    def is_pc_connected(self) -> bool:
+        """Check if PC AI Service is connected (heartbeat within last 30 seconds)"""
+        import time
+        if self.pc_last_heartbeat is None:
+            return False
+        return (time.time() - self.pc_last_heartbeat) < 30
