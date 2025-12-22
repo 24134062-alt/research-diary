@@ -86,14 +86,33 @@ class AIService:
                 logger.info(f"📚 SUBJECT MODE CHANGED TO: {self.current_subject.upper()}")
             
             elif msg.topic == "teacher/chat/request":
-                # Handle Teacher Chat
+                # Handle Teacher Chat in a separate thread
+                import threading
                 data = json.loads(msg.payload.decode())
                 text = data.get("text", "")
                 if text:
-                    asyncio.run_coroutine_threadsafe(self.process_teacher_chat(text), asyncio.get_event_loop())
+                    logger.info(f"[TEACHER] Chat Request: {text}")
+                    thread = threading.Thread(target=self._handle_teacher_chat_sync, args=(text,))
+                    thread.start()
 
         except Exception as e:
             logger.error(f"MQTT Message Error: {e}")
+    
+    def _handle_teacher_chat_sync(self, text: str):
+        """Synchronous handler for teacher chat"""
+        try:
+            # Ask AI (synchronous call)
+            answer_data = self.ai_assistant.ask_question_with_visual(text, "TEACHER")
+            
+            # Send response back to MQTT
+            response = {
+                "text": answer_data['text'],
+                "visual": answer_data['visual_param'] if answer_data['has_visual'] else None
+            }
+            self.mqtt_client.publish("teacher/chat/response", json.dumps(response))
+            logger.info(f"[TEACHER] Sent response: {answer_data['text'][:50]}...")
+        except Exception as e:
+            logger.error(f"Error processing teacher chat: {e}")
 
     async def process_teacher_chat(self, text: str):
         """Process text from Teacher Chatbot"""
