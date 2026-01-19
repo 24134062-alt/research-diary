@@ -1,5 +1,90 @@
 const API_URL = "";
 
+// ============================================
+// MOBILE RESPONSIVE FUNCTIONS
+// ============================================
+
+/**
+ * Toggle mobile sidebar menu
+ */
+function toggleMobileMenu() {
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.getElementById('sidebar-overlay');
+    const menuBtn = document.getElementById('mobile-menu-btn');
+
+    const isOpen = sidebar.classList.toggle('open');
+    overlay.classList.toggle('active', isOpen);
+
+    // Update ARIA attributes
+    if (menuBtn) {
+        menuBtn.setAttribute('aria-expanded', isOpen);
+        menuBtn.setAttribute('aria-label', isOpen ? 'Đóng menu điều hướng' : 'Mở menu điều hướng');
+    }
+
+    // Prevent body scroll when menu is open
+    document.body.style.overflow = isOpen ? 'hidden' : '';
+}
+
+/**
+ * Close mobile menu when clicking a nav item
+ */
+function closeMobileMenuOnNavClick() {
+    const navItems = document.querySelectorAll('.nav-item');
+    navItems.forEach(item => {
+        item.addEventListener('click', () => {
+            if (window.innerWidth <= 768) {
+                toggleMobileMenu();
+            }
+        });
+    });
+}
+
+/**
+ * Handle Escape key to close modals and mobile menu
+ */
+function handleEscapeKey(event) {
+    if (event.key === 'Escape') {
+        // Close mobile menu if open
+        const sidebar = document.getElementById('sidebar');
+        if (sidebar && sidebar.classList.contains('open')) {
+            toggleMobileMenu();
+            return;
+        }
+
+        // Close chat modal if open
+        const chatModal = document.getElementById('chat-modal');
+        if (chatModal && chatModal.classList.contains('active')) {
+            closeChatModal();
+            return;
+        }
+    }
+}
+
+/**
+ * Initialize responsive behaviors
+ */
+function initResponsive() {
+    // Close mobile menu on nav click
+    closeMobileMenuOnNavClick();
+
+    // Handle keyboard navigation
+    document.addEventListener('keydown', handleEscapeKey);
+
+    // Handle resize - close mobile menu if switching to desktop
+    window.addEventListener('resize', () => {
+        if (window.innerWidth > 768) {
+            const sidebar = document.getElementById('sidebar');
+            const overlay = document.getElementById('sidebar-overlay');
+            if (sidebar) sidebar.classList.remove('open');
+            if (overlay) overlay.classList.remove('active');
+            document.body.style.overflow = '';
+        }
+    });
+}
+
+// Initialize on DOM ready
+document.addEventListener('DOMContentLoaded', initResponsive);
+
 async function fetchDevices() {
     try {
         const res = await fetch(`${API_URL}/api/devices`);
@@ -11,44 +96,121 @@ async function fetchDevices() {
 }
 
 function renderDevices(devices) {
-    const container = document.getElementById('devices-container');
+    const container = document.getElementById('devices-list');
+    if (!container) return;
+
     container.innerHTML = '';
 
-    if (Object.keys(devices).length === 0) {
-        container.innerHTML = '<div class="card">No devices connected</div>';
+    const deviceValues = Object.values(devices);
+
+    if (deviceValues.length === 0) {
+        container.innerHTML = `
+            <div class="empty-state">
+                <i class="fas fa-search"></i>
+                <p>Đang tìm kiếm thiết bị...</p>
+            </div>
+        `;
+        updateStats(0, 0); // Update stats for 0 devices
         return;
     }
 
-    Object.values(devices).forEach(device => {
+    let totalBattery = 0;
+    let batteryCount = 0;
+
+    deviceValues.forEach(device => {
         const div = document.createElement('div');
-        div.className = 'card';
+        div.className = 'device-card'; // Changed to match modern UI or kept as card if css uses it
+
+        const isOnline = device.status === 'online';
+        if (isOnline && device.battery) {
+            totalBattery += device.battery;
+            batteryCount++;
+        }
+
         div.innerHTML = `
-            <h3>${device.device_id}</h3>
-            <div class="info-row">
-                <span>Type</span>
-                <span>${device.type}</span>
+            <div class="device-header">
+                <h3><i class="${device.type === 'glasses' ? 'fas fa-glasses' : 'fas fa-microphone'}"></i> ${device.device_id}</h3>
+                <span class="status-dot ${isOnline ? 'online' : 'offline'}"></span>
             </div>
-            <div class="info-row">
-                <span>Status</span>
-                <span style="color: ${device.status === 'online' ? '#34d399' : '#94a3b8'}">${device.status}</span>
-            </div>
-             <div class="info-row">
-                <span>Mode</span>
-                <span class="mode-badge" onclick="toggleMode('${device.device_id}', '${device.mode}')" style="cursor:pointer">${device.mode}</span>
-            </div>
-            ${device.battery ? `
-            <div class="info-row">
-                <span>Battery</span>
-                <span>${device.battery}%</span>
-            </div>` : ''}
-            
-            <div class="actions">
-                <button class="btn-sm" onclick="setMode('${device.device_id}', 'class')">Class</button>
-                <button class="btn-sm" onclick="setMode('${device.device_id}', 'private')">Private</button>
+            <div class="device-body">
+                <div class="info-row">
+                    <span>Loại:</span>
+                    <span style="text-transform: capitalize;">${device.type}</span>
+                </div>
+                <div class="info-row">
+                    <span>Trạng thái:</span>
+                    <span style="color: ${isOnline ? '#22c55e' : '#71717a'}">${isOnline ? 'Hoạt động' : 'Ngoại tuyến'}</span>
+                </div>
+                <div class="info-row">
+                    <span>Chế độ:</span>
+                    <span class="mode-badge" onclick="setMode('${device.device_id}', '${device.mode === 'class' ? 'private' : 'class'}')" style="cursor:pointer; background: ${device.mode === 'class' ? 'rgba(59, 130, 246, 0.2)' : 'rgba(139, 92, 246, 0.2)'}; color: ${device.mode === 'class' ? '#60a5fa' : '#c084fc'}">${device.mode}</span>
+                </div>
+                ${device.battery !== undefined ? `
+                <div class="info-row">
+                    <span>Pin:</span>
+                    <div style="display: flex; align-items: center; gap: 6px;">
+                        <div style="width: 40px; height: 10px; border: 1px solid #3f3f46; border-radius: 2px; padding: 1px;">
+                            <div style="width: ${device.battery}%; height: 100%; background: ${device.battery > 20 ? '#22c55e' : '#ef4444'}; border-radius: 1px;"></div>
+                        </div>
+                        <span>${device.battery}%</span>
+                    </div>
+                </div>` : ''}
             </div>
         `;
         container.appendChild(div);
     });
+
+    const avgBattery = batteryCount > 0 ? Math.round(totalBattery / batteryCount) : 0;
+    updateStats(deviceValues.length, avgBattery);
+}
+
+function updateStats(count, battery) {
+    const countEl = document.getElementById('device-count');
+    const batteryEl = document.getElementById('avg-battery');
+
+    if (countEl) countEl.textContent = count;
+    if (batteryEl) {
+        if (count === 0) {
+            batteryEl.textContent = '--%';
+        } else {
+            batteryEl.textContent = battery + '%';
+        }
+    }
+}
+
+async function fetchActivityLog() {
+    try {
+        const res = await fetch(`${API_URL}/api/activity-log`);
+        const logs = await res.json();
+        renderActivityLog(logs);
+    } catch (e) {
+        console.error("Failed to fetch activity log", e);
+    }
+}
+
+function renderActivityLog(logs) {
+    const container = document.getElementById('activity-log');
+    if (!container) return;
+
+    if (!logs || logs.length === 0) {
+        container.innerHTML = `
+            <div class="empty-state" style="padding: 20px; text-align: center;">
+                <i class="fas fa-clock" style="color: #71717a; font-size: 1.5rem; margin-bottom: 8px;"></i>
+                <p style="color: #71717a; margin: 0;">Chưa có hoạt động nào được ghi nhận</p>
+            </div>
+        `;
+        return;
+    }
+
+    container.innerHTML = logs.map(log => `
+        <div class="activity-item" style="display: flex; gap: 12px; margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid rgba(255,255,255,0.05);">
+            <div style="color: #a1a1aa; font-size: 0.8rem; min-width: 60px;">${log.time}</div>
+            <div style="flex: 1;">
+                <i class="fas fa-${log.icon || 'circle'}" style="margin-right: 6px; font-size: 0.8rem; color: #8b5cf6;"></i>
+                ${log.message}
+            </div>
+        </div>
+    `).join('');
 }
 
 async function startRecord() {
@@ -497,11 +659,18 @@ function connectToWiFi(ssid, isSecure) {
     })
         .then(res => res.json())
         .then(data => {
-            if (data.status === 'success' && data.new_url) {
-                // Show modal with new URL
-                showNewIPModal(ssid, data.new_url);
-            } else if (data.status === 'success') {
-                showToast(`✅ ${data.message}`, 'success');
+            if (data.status === 'success' || data.status === 'pending') {
+                if (data.new_url) {
+                    showNewIPModal(ssid, data.new_url);
+                } else {
+                    showToast(`✅ ${data.message}`, 'success');
+                    // Special case for pending: Pi is switching networks
+                    if (data.status === 'pending') {
+                        setTimeout(() => {
+                            alert(`📡 Hệ thống đang chuyển sang mạng "${ssid}"...\n\nNếu trình duyệt mất kết nối, hãy kết nối thiết bị của bạn vào WiFi "${ssid}" và truy cập địa chỉ IP mới của Box.`);
+                        }, 1000);
+                    }
+                }
             } else {
                 showToast(`❌ ${data.message}`, 'error');
             }
@@ -676,23 +845,20 @@ function updateWifiWidget(status) {
     const widget = document.getElementById('wifi-status-widget');
     if (!widget) return;
 
-    if (status.ap_mode) {
+    if (status.connected) {
         widget.innerHTML = `
-            <i class="fas fa-wifi" style="color: #fbbf24"></i>
-            <span>Hotspot: ${status.ssid || 'ClassLink-Setup'}</span>
+            <i class="fas fa-wifi" style="color: #22c55e;"></i>
+            <span style="color: #4ade80;">${status.ssid} (${status.signal}%)</span>
         `;
-    } else if (status.connected) {
-        const color = status.level === 'strong' ? '#34d399' :
-            status.level === 'medium' ? '#fbbf24' :
-                status.level === 'weak' ? '#fb923c' : '#ef4444';
+    } else if (status.ap_mode) {
         widget.innerHTML = `
-            <i class="fas fa-wifi" style="color: ${color}"></i>
-            <span>${status.ssid || 'Connected'} (${status.signal}%)</span>
+            <i class="fas fa-broadcast-tower" style="color: #fb923c;"></i>
+            <span style="color: #fb923c;">Hotspot Active</span>
         `;
     } else {
         widget.innerHTML = `
-            <i class="fas fa-wifi-slash" style="color: #71717a"></i>
-            <span>Not connected</span>
+            <i class="fas fa-wifi-slash" style="color: #71717a;"></i>
+            <span style="color: #a1a1aa;">Not connected</span>
         `;
     }
 }
@@ -887,19 +1053,29 @@ async function updateCode() {
     }
 }
 
-// Poll every 2 seconds
+// Poll every 3 seconds for dashboard data
 setInterval(() => {
     fetchDevices();
-    fetchWifiStatus(); // Check WiFi status
+    fetchWifiStatus();
+    fetchActivityLog();
+    loadCurrentDocument(); // Keep doc status in sync
+    fetchTranscription();  // Poll speech transcription
 
     // Only poll chat if active view is chat
     const chatView = document.getElementById('view-chat');
     if (chatView && chatView.classList.contains('active')) {
         fetchChatHistory();
     }
-}, 2000);
+}, 3000);
 
-fetchDevices();
+// Initial Load
+document.addEventListener('DOMContentLoaded', () => {
+    initResponsive();
+    fetchDevices();
+    fetchWifiStatus();
+    fetchActivityLog();
+    loadCurrentDocument();
+});
 
 // ===== PC AI SERVICE FUNCTIONS =====
 
@@ -1091,4 +1267,197 @@ function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+}
+
+// --- Document Upload Functions ---
+async function uploadDocument(file) {
+    if (!file) return;
+
+    const allowedTypes = ['.pdf', '.docx', '.txt'];
+    const ext = '.' + file.name.split('.').pop().toLowerCase();
+
+    if (!allowedTypes.includes(ext)) {
+        showToast('❌ Chỉ hỗ trợ file PDF, DOCX, TXT!', 'error');
+        return;
+    }
+
+    if (file.size > 10 * 1024 * 1024) { // 10MB limit
+        showToast('❌ File quá lớn (tối đa 10MB)!', 'error');
+        return;
+    }
+
+    // Show progress
+    document.getElementById('upload-progress').style.display = 'block';
+    document.getElementById('upload-area').style.display = 'none';
+
+    try {
+        const formData = new FormData();
+        formData.append('file', file);
+
+        const res = await fetch(`${API_URL}/api/document/upload`, {
+            method: 'POST',
+            body: formData
+        });
+
+        const result = await res.json();
+
+        if (res.ok && result.status === 'success') {
+            showToast(`✅ ${result.message}`, 'success');
+            updateDocumentUI(result);
+        } else {
+            showToast(`❌ ${result.detail || result.message || 'Lỗi upload'}`, 'error');
+            document.getElementById('upload-area').style.display = 'block';
+        }
+    } catch (e) {
+        console.error('Upload error:', e);
+        showToast('❌ Lỗi kết nối. Thử lại sau.', 'error');
+        document.getElementById('upload-area').style.display = 'block';
+    } finally {
+        document.getElementById('upload-progress').style.display = 'none';
+        document.getElementById('doc-file-input').value = ''; // Reset input
+    }
+}
+
+function handleFileDrop(event) {
+    event.preventDefault();
+    event.target.style.borderColor = '#3f3f46';
+    event.target.style.background = 'transparent';
+
+    const file = event.dataTransfer.files[0];
+    if (file) {
+        uploadDocument(file);
+    }
+}
+
+function updateDocumentUI(data) {
+    const statusEl = document.getElementById('doc-status');
+    const infoEl = document.getElementById('current-doc-info');
+    const uploadEl = document.getElementById('upload-area');
+
+    if (data && data.filename) {
+        // Show document info
+        statusEl.innerHTML = `
+            <i class="fas fa-file-check" style="color: #22c55e;"></i>
+            <span style="color: #4ade80;">Đã tải</span>
+        `;
+        statusEl.style.background = 'rgba(34, 197, 94, 0.2)';
+
+        document.getElementById('doc-filename').textContent = data.filename;
+        document.getElementById('doc-info').textContent = `${data.content_length?.toLocaleString() || 0} ký tự`;
+
+        infoEl.style.display = 'block';
+        uploadEl.style.display = 'none';
+    } else {
+        // No document
+        statusEl.innerHTML = `
+            <i class="fas fa-file-circle-xmark"></i>
+            Chưa có tài liệu
+        `;
+        statusEl.style.background = 'rgba(113, 113, 122, 0.2)';
+        statusEl.style.color = '#a1a1aa';
+
+        infoEl.style.display = 'none';
+        uploadEl.style.display = 'block';
+    }
+}
+
+async function loadCurrentDocument() {
+    try {
+        const res = await fetch(`${API_URL}/api/document/current`);
+        const data = await res.json();
+
+        if (data.status === 'loaded') {
+            updateDocumentUI(data);
+        } else {
+            updateDocumentUI(null);
+        }
+    } catch (e) {
+        console.error('Failed to load current document:', e);
+    }
+}
+
+async function clearDocument() {
+    if (!confirm('Xóa tài liệu bài giảng hiện tại?')) return;
+
+    try {
+        const res = await fetch(`${API_URL}/api/document/clear`, {
+            method: 'DELETE'
+        });
+        const result = await res.json();
+
+        if (result.status === 'success') {
+            showToast('✅ Đã xóa tài liệu', 'success');
+            updateDocumentUI(null);
+        } else {
+            showToast('❌ Lỗi xóa tài liệu', 'error');
+        }
+    } catch (e) {
+        showToast('❌ Lỗi kết nối', 'error');
+    }
+}
+
+// Load current document on page load
+document.addEventListener('DOMContentLoaded', () => {
+    loadCurrentDocument();
+});
+// --- Transcription Rendering ---
+async function fetchTranscription() {
+    try {
+        const res = await fetch(`${API_URL}/api/stt/history`);
+        const history = await res.json();
+        renderTranscription(history);
+    } catch (e) {
+        console.error('Failed to fetch transcription:', e);
+    }
+}
+
+function renderTranscription(history) {
+    const container = document.getElementById('mic-transcription-area');
+    if (!container) return;
+
+    if (!history || history.length === 0) {
+        container.innerHTML = '<p style="color: #71717a; text-align: center;">Chưa có dữ liệu thu âm</p>';
+        return;
+    }
+
+    // Render entries
+    container.innerHTML = history.map(entry => {
+        const isAI = entry.sender === 'ai';
+        return `
+            <div style="margin-bottom: 12px; border-left: 2px solid ${isAI ? '#8b5cf6' : '#22c55e'}; padding-left: 10px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px;">
+                    <span style="font-size: 0.75rem; color: ${isAI ? '#a78bfa' : '#4ade80'}; font-weight: 600;">
+                        ${isAI ? '🤖 AI' : '🎤 Giáo viên'}
+                    </span>
+                    <span style="font-size: 0.7rem; color: #52525b;">${entry.time}</span>
+                </div>
+                <div style="color: #e4e4e7;">${entry.text}</div>
+            </div>
+        `;
+    }).join('');
+
+    // Update Mic status indicator and Latency
+    const micStatus = document.getElementById('mic-status');
+    const latencyEl = document.getElementById('ai-latency');
+    if (history.length > 0) {
+        if (micStatus) {
+            micStatus.innerHTML = `
+                <span style="width: 6px; height: 6px; background: #22c55e; border-radius: 50%;"></span>
+                Hoạt động
+            `;
+        }
+        if (latencyEl) {
+            // Latency should be calculated from real MQTT/STT timestamps
+            // Removing hardcoded 1.2s for authentic measurement
+            latencyEl.textContent = '--';
+        }
+    }
+}
+
+function clearMicTranscription() {
+    // Only clears on frontend for now, or we could add a backend clear if needed
+    const container = document.getElementById('mic-transcription-area');
+    if (container) {
+        container.innerHTML = '<p style="color: #71717a; text-align: center;">Văn bản đã được xóa</p>';
+    }
 }

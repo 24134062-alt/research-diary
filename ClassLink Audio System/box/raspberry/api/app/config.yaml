@@ -1,0 +1,18 @@
+# ClassLink Box Configuration
+# Centralizes all network and system settings for the Raspberry Pi API.
+
+MQTT_BROKER: "localhost"
+MQTT_PORT: 1883
+
+SYSTEM:
+  PORT: 8002
+  DEBUG: false
+
+WIFI:
+  AP_SSID: "ClassLink-Setup"
+  AP_PASS: "classlink2024"
+  DEVICE_NAME: "ClassLink-Box-01"
+
+UPLOADS:
+  DIR: "uploads"
+  MAX_SIZE_MB: 10

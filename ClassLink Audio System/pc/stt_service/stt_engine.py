@@ -13,20 +13,21 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 class STTEngine:
-    def __init__(self):
+    def __init__(self, sample_rate=16000, language='vi-VN', buffer_seconds=3):
         """Initialize STT engine with Google API"""
         self.recognizer = sr.Recognizer()
         self.audio_buffer = bytearray()
         
-        # Audio config: 16kHz, 16-bit, mono
-        self.SAMPLE_RATE = 16000
+        # Audio config
+        self.SAMPLE_RATE = sample_rate
         self.SAMPLE_WIDTH = 2  # 16-bit = 2 bytes
         self.CHANNELS = 1
+        self.LANGUAGE = language
         
-        # Buffer threshold: ~3 seconds of audio
-        self.BUFFER_THRESHOLD = self.SAMPLE_RATE * self.SAMPLE_WIDTH * 3
+        # Buffer threshold
+        self.BUFFER_THRESHOLD = self.SAMPLE_RATE * self.SAMPLE_WIDTH * buffer_seconds
         
-        logger.info("STT Engine initialized (Google Cloud API - no model needed)")
+        logger.info(f"STT Engine initialized (Google API, lang={self.LANGUAGE}, buffer={buffer_seconds}s)")
     
     def process_audio(self, audio_data: bytes) -> str | None:
         """
@@ -76,7 +77,7 @@ class STTEngine:
         try:
             text = self.recognizer.recognize_google(
                 audio, 
-                language='vi-VN'  # Vietnamese
+                language=self.LANGUAGE
             )
             logger.info(f"STT Result: {text}")
             return text

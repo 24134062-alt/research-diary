@@ -28,19 +28,22 @@ class AITeachingAssistant:
             api_key: Google AI API key. If None, reads from GEMINI_API_KEY env var.
         """
         self.api_key = api_key or os.getenv("GEMINI_API_KEY")
-        if not self.api_key:
-            raise ValueError("Gemini API key not provided. Set GEMINI_API_KEY environment variable.")
-        
         # New google-genai package
-        self.client = genai.Client(api_key=self.api_key)
-        self.model_name = "gemini-2.5-flash"  # Free tier, fast
+        self.model_name = "gemini-1.5-flash"  # Flash is fast and efficient
+        self.is_demo_mode = False
         
-        # Context storage
-        self.lecture_content = ""
-        self.teacher_transcript = []
-        self.grade_level = "trung học"
-        
-        logger.info(f"AI Teaching Assistant initialized with {self.model_name}")
+        if not self.api_key or self.api_key == "paste_your_api_key_here":
+            logger.warning("Gemini API key missing or invalid. AI Assistant running in DEMO mode.")
+            self.is_demo_mode = True
+            self.client = None
+        else:
+            try:
+                self.client = genai.Client(api_key=self.api_key)
+                logger.info(f"AI Teaching Assistant initialized with {self.model_name}")
+            except Exception as e:
+                logger.error(f"Failed to initialize Gemini client: {e}. Switching to DEMO mode.")
+                self.is_demo_mode = True
+                self.client = None
     
     def load_lecture(self, content: str):
         """Load lecture content into AI context."""
@@ -108,6 +111,9 @@ HUONG DAN TRA LOI:
 TRA LOI (than thien, ngan gon):
 """
         
+        if self.is_demo_mode:
+            return "ERROR: Gemini API Key missing. Please set GEMINI_API_KEY in .env to use the AI Assistant."
+
         try:
             # Call Gemini API with new package
             response = self.client.models.generate_content(

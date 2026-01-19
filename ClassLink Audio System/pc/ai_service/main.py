@@ -77,9 +77,10 @@ class AIService:
         logger.info(f"Max concurrent requests: {max_concurrent}")
 
     def on_mqtt_connect(self, client, userdata, flags, rc):
-        logger.info("Subscribing to teacher/subject and teacher/chat/request")
+        logger.info("Subscribing to teacher/subject, teacher/chat/request, teacher/document")
         client.subscribe("teacher/subject")
         client.subscribe("teacher/chat/request")
+        client.subscribe("teacher/document")  # Tài liệu bài giảng
         # Start heartbeat
         self._send_heartbeat()
     
@@ -116,6 +117,20 @@ class AIService:
                     logger.info(f"[TEACHER] Chat Request: {text}")
                     thread = threading.Thread(target=self._handle_teacher_chat_sync, args=(text,))
                     thread.start()
+            
+            elif msg.topic == "teacher/document":
+                # Handle document upload from teacher
+                data = json.loads(msg.payload.decode())
+                action = data.get("action", "")
+                
+                if action == "load":
+                    content = data.get("content", "")
+                    filename = data.get("filename", "")
+                    self.ai_assistant.load_lecture(content)
+                    logger.info(f"📄 LOADED DOCUMENT: {filename} ({len(content)} chars)")
+                elif action == "clear":
+                    self.ai_assistant.clear_context()
+                    logger.info("📄 CLEARED DOCUMENT CONTEXT")
 
         except Exception as e:
             logger.error(f"MQTT Message Error: {e}")
@@ -328,11 +343,28 @@ class AIService:
     
     async def send_response(self, addr: tuple, text: str, 
                            visual_type: str = None, visual_param: str = None):
-        """Send response back to device."""
-        # TODO: Implement response protocol via MQTT
-        logger.info(f"Sending response to {addr}: {text}")
-        if visual_type:
-            logger.info(f"  Visual: {visual_type}/{visual_param}")
+        """Send response back to device via MQTT."""
+        if not self.mqtt_connected:
+            logger.warning("Cannot send response: MQTT not connected")
+            return
+
+        try:
+            # Protocol per glasses firmware (simple string for now, or JSON if updated)
+            # The current glasses main.cpp expects raw string for display
+            payload = {
+                "text": text,
+                "visual_type": visual_type,
+                "visual_param": visual_param,
+                "timestamp": time.time()
+            }
+            
+            # Publish for the dashboard/pi to bridge
+            self.mqtt_client.publish("ai/answer", text) # Glasses raw string
+            self.mqtt_client.publish("ai/answer/full", json.dumps(payload)) # For richer consumers
+            
+            logger.info(f"Published AI response to 'ai/answer': {text[:50]}...")
+        except Exception as e:
+            logger.error(f"Failed to publish MQTT response: {e}")
     
     @staticmethod
     def pcm_to_wav(pcm_data: bytes, sample_rate: int, channels: int, sample_width: int) -> bytes:

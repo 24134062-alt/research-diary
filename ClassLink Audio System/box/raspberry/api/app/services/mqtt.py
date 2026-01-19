@@ -9,7 +9,25 @@ try:
     MQTT_AVAILABLE = True
 except ImportError:
     MQTT_AVAILABLE = False
-    print("⚠️  paho-mqtt not installed - MQTT service running in DEMO mode")
+    print("[WARN] paho-mqtt not installed - MQTT service running in DEMO mode")
+
+# Load configuration from config.yaml if present
+import os
+from pathlib import Path
+import yaml
+
+CONFIG_PATH = Path(__file__).parent.parent / "config.yaml"
+if CONFIG_PATH.is_file():
+    with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+        CONFIG = yaml.safe_load(f) or {}
+else:
+    CONFIG = {}
+
+import os
+from dotenv import load_dotenv
+
+# Load environment variables from .env if present
+load_dotenv()
 
 class MQTTService:
     def set_mode(self, device_id, mode):
@@ -23,6 +41,8 @@ class MQTTService:
         # Subscribe to all relevant topics
         client.subscribe("glasses/status")
         client.subscribe("glasses/text")
+        client.subscribe("glasses/mode")
+        client.subscribe("ai/answer")
         client.subscribe("audio/control")
         
         # New: Chat & Monitoring
@@ -47,16 +67,18 @@ class MQTTService:
         # PC AI Service status tracking
         self.pc_last_heartbeat = None  # Timestamp of last PC heartbeat
         
+        self.uart_service = None # Reference to UART service
+        
         # Initialize MQTT client only if library is available
         if MQTT_AVAILABLE:
             self.client = mqtt.Client()
             self.client.on_connect = self.on_connect
             self.client.on_message = self.on_message
-            self.broker = "localhost"  # Local Mosquitto broker on Raspberry Pi
-            self.port = 1883
+            self.broker = CONFIG.get("MQTT_BROKER", "localhost")  # MQTT broker address from config.yaml
+            self.port = int(CONFIG.get("MQTT_PORT", 1883))  # MQTT broker port from config.yaml
         else:
             self.client = None
-            print("📡 MQTT features disabled - API running in standalone mode")
+            print("[INFO] MQTT features disabled - API running in standalone mode")
 
     def on_message(self, client, userdata, msg):
         try:
@@ -80,8 +102,35 @@ class MQTTService:
             elif topic == "teacher/chat/response":
                 # AI answering. We assume the AI echoes the session_id or we default to broadcast for now
                 session_id = data.get("session_id", "broadcast")
-                self.add_chat_log(session_id, "ai", data.get("text", ""), data.get("visual", None))
+                text = data.get("text", "")
+                self.add_chat_log(session_id, "ai", text, data.get("visual", None))
                 
+                # Also add to global transcription for dashboard
+                try:
+                    from ..main import add_transcription
+                    add_transcription(text, sender="ai")
+                except Exception as e:
+                    print(f"Failed to add AI transcription: {e}")
+                    
+            elif topic == "glasses/text":
+                # This is the STT result from PC for the teacher/micro
+                text = data.get("text", "")
+                if text:
+                    try:
+                        from ..main import add_transcription
+                        add_transcription(text, sender="teacher")
+                    except Exception as e:
+                        print(f"Failed to add teacher transcription: {e}")
+                
+            elif topic == "ai/answer":
+                # AI answering query from glasses
+                text = payload_str # Glasses protocol is raw string
+                try:
+                    from ..main import add_transcription
+                    add_transcription(text, sender="ai")
+                except Exception as e:
+                    print(f"Failed to add AI transcription from glasses: {e}")
+                    
             elif topic == "student/query/log":
                 # Log student query to their specific session
                 student_id = data.get("student", "Unknown")
@@ -98,7 +147,16 @@ class MQTTService:
                 # PC AI Service heartbeat
                 import time
                 self.pc_last_heartbeat = time.time()
-                print(f"💓 PC AI Service heartbeat received")
+                print(f"[HEARTBEAT] PC AI Service heartbeat received")
+
+            elif topic == "audio/control":
+                # Forward control commands to UART (ESP32)
+                if self.uart_service:
+                    self.uart_service.send({
+                        "type": "MODE_SET",
+                        "mode": data.get("mode", "CLASS").upper()
+                    })
+                    print(f"[BRIDGE] MQTT -> UART: {data}")
 
         except json.JSONDecodeError:
             print("Failed to decode JSON payload")
@@ -138,10 +196,10 @@ class MQTTService:
             try:
                 self.client.publish(topic, json.dumps(payload))
             except Exception as e:
-                print(f"⚠️  MQTT publish failed: {e}")
+                print(f"[WARN] MQTT publish failed: {e}")
         # In demo mode, just log the action
         else:
-            print(f"📤 [DEMO] Would publish to {topic}: {payload}")
+            print(f"[DEMO] Would publish to {topic}: {payload}")
     
     async def start(self):
         """Start MQTT service (connect and loop)"""
@@ -151,12 +209,15 @@ class MQTTService:
                 self.client.connect(self.broker, self.port, 60)
                 # Run loop in background
                 self.client.loop_start()
-                print("✅ MQTT service started successfully")
+                print("[OK] MQTT service started successfully")
             except Exception as e:
-                print(f"⚠️  MQTT connection failed: {e}. Running in standalone mode.")
+                print(f"[WARN] MQTT connection failed: {e}. Running in standalone mode.")
         else:
-            print("📡 MQTT service running in DEMO mode - no broker connection")
+            print("[INFO] MQTT service running in DEMO mode - no broker connection")
     
+    def set_uart_service(self, uart_service):
+        self.uart_service = uart_service
+
     def is_pc_connected(self) -> bool:
         """Check if PC AI Service is connected (heartbeat within last 30 seconds)"""
         import time

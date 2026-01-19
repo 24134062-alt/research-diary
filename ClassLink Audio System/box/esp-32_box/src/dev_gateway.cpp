@@ -14,30 +14,35 @@
 #include <Arduino.h>
 #include <WiFi.h>
 
+// ====== External UART functions ======
+extern void uart_send_dev_join(int total);
+extern void uart_send_dev_leave(int total);
+
 // ====== State ======
 static int last_station_count = 0;
 
 // ====== Public API ======
 void dev_gateway_init() {
-    last_station_count = WiFi.softAPgetStationNum();
-    Serial.print("[GATEWAY] Initial station count: ");
-    Serial.println(last_station_count);
+  last_station_count = WiFi.softAPgetStationNum();
+  Serial.print("[GATEWAY] Initial station count: ");
+  Serial.println(last_station_count);
 }
 
 void dev_gateway_loop() {
-    int current = WiFi.softAPgetStationNum();
+  int current = WiFi.softAPgetStationNum();
 
-    if (current != last_station_count) {
-        if (current > last_station_count) {
-            Serial.print("[GATEWAY] Device JOINED. Total: ");
-            Serial.println(current);
-        } else {
-            Serial.print("[GATEWAY] Device LEFT. Total: ");
-            Serial.println(current);
-        }
-
-        // Cập nhật state
-        last_station_count = current;
+  if (current != last_station_count) {
+    if (current > last_station_count) {
+      Serial.print("[GATEWAY] Device JOINED. Total: ");
+      Serial.println(current);
+      uart_send_dev_join(current);
+    } else {
+      Serial.print("[GATEWAY] Device LEFT. Total: ");
+      Serial.println(current);
+      uart_send_dev_leave(current);
     }
-}
 
+    // Cập nhật state
+    last_station_count = current;
+  }
+}

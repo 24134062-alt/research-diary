@@ -5,28 +5,34 @@ Path: C:\\Users\\DELL\\project\\pc\\stt_service\\send_result.py
 Vai trò:
 - Gửi kết quả STT (text) về Raspberry BOX
 - Hỗ trợ MOCK_MODE khi Raspberry chưa chạy
-
-Ghi chú:
-- Giao thức JSON line đơn giản
-- Không block pipeline audio
 """
 
 import time
 import json
+import os
 from typing import Optional
+from pathlib import Path
 
 try:
     import requests
 except ImportError:
     requests = None
 
+# ====== Load Config ======
+CONFIG_PATH = Path(__file__).parent / "config.json"
+MOCK_MODE = False  # Set to False for production
+RASPBERRY_URL = "http://192.168.4.1:8002/api/stt"
 
-# ====== Config ======
-MOCK_MODE = True  # <- đổi sang False khi Raspberry sẵn sàng
+if CONFIG_PATH.exists():
+    try:
+        with open(CONFIG_PATH, 'r') as f:
+            config_data = json.load(f)
+            RASPBERRY_URL = config_data.get("stt", {}).get("box_url", RASPBERRY_URL)
+            print(f"[CONFIG] Loaded Box URL: {RASPBERRY_URL}")
+    except Exception as e:
+        print(f"[WARN] Failed to load config.json: {e}")
 
-RASPBERRY_URL = "http://127.0.0.1:8000/api/stt"  # endpoint dự kiến
-HTTP_TIMEOUT = 0.5  # giây
-
+HTTP_TIMEOUT = 1.0 # Increase timeout slightly
 
 def send_text(
     text: str,
@@ -35,10 +41,6 @@ def send_text(
 ) -> bool:
     """
     Gửi text về Raspberry (hoặc mock)
-
-    Returns:
-        True  : gửi (hoặc mock) OK
-        False : lỗi
     """
     payload = {
         "type": "STT_TEXT",
@@ -68,4 +70,3 @@ def send_text(
     except Exception as e:
         print("[SEND][EXC]", e)
         return False
-

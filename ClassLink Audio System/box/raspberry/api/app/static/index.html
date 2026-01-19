@@ -11,12 +11,17 @@
 </head>
 
 <body>
+    <!-- Skip to Content Link for Accessibility -->
+    <a href="#main-content" class="skip-to-content">Chuyển đến nội dung chính</a>
+
+    <!-- Sidebar Overlay for Mobile -->
+    <div class="sidebar-overlay" id="sidebar-overlay" onclick="toggleMobileMenu()"></div>
+
     <div class="app-container">
         <!-- Sidebar Navigation -->
-        <aside class="sidebar">
+        <aside class="sidebar" id="sidebar" role="navigation" aria-label="Menu điều hướng chính">
             <div class="logo">
-                <i class="fas fa-wave-square"></i>
-                <span>ClassLink</span>
+                <img src="/static/logo.png" alt="ClassLink Logo" class="logo-img">
             </div>
 
             <nav>
@@ -38,21 +43,34 @@
         </aside>
 
         <!-- Main Content Area -->
-        <main class="main-content">
+        <main class="main-content" id="main-content" role="main" aria-label="Nội dung chính">
             <!-- Top Header -->
-            <header>
+            <header role="banner">
                 <div class="header-title">
-                    <h1 id="page-title">Trang Chủ Quan Trị</h1>
-                    <p id="page-subtitle">Quản lý thiết bị và chế độ giảng dạy</p>
+                    <!-- Mobile Menu Button -->
+                    <button class="mobile-menu-btn" id="mobile-menu-btn" onclick="toggleMobileMenu()"
+                        aria-label="Mở menu điều hướng" aria-expanded="false" aria-controls="sidebar">
+                        <i class="fas fa-bars"></i>
+                    </button>
+                    <div>
+                        <h1 id="page-title">Trang Chủ Quản Trị</h1>
+                        <p id="page-subtitle">Quản lý thiết bị và chế độ giảng dạy</p>
+                    </div>
                 </div>
                 <!-- Controls -->
-                <div class="global-actions">
-                    <button class="btn-primary" onclick="openChatModal()" style="position: relative;">
-                        <i class="fas fa-robot"></i> Giám Sát & Trợ Lý AI
+                <div class="global-actions" role="toolbar" aria-label="Công cụ nhanh">
+                    <!-- AI Assistant Button with Capybara Mascot Overlay -->
+                    <div class="ai-button-container">
+                        <!-- Capybara Head peeking over the button -->
+                        <img src="/static/capybara-head.png" alt="" class="capybara-overlay" aria-hidden="true">
+                        <!-- Actual clickable button -->
+                        <button class="btn-primary ai-btn" onclick="openChatModal()"
+                            aria-label="Mở Giám Sát và Trợ Lý AI" aria-haspopup="dialog">
+                            <span>Trợ Lý AI</span>
+                        </button>
                         <!-- Notification Badge -->
-                        <span id="chat-badge"
-                            style="position: absolute; top: -8px; right: -8px; background: #ef4444; color: white; font-size: 0.7rem; font-weight: 700; padding: 2px 6px; border-radius: 10px; min-width: 18px; text-align: center; display: none;">0</span>
-                    </button>
+                        <span id="chat-badge" class="ai-badge">0</span>
+                    </div>
                     <!-- WiFi Status Widget -->
                     <div id="wifi-status-widget"
                         style="display: flex; align-items: center; gap: 8px; padding: 8px 16px; background: rgba(255,255,255,0.05); border-radius: 8px; color: var(--text-secondary); font-size: 0.9rem;">
@@ -94,13 +112,13 @@
                             <div class="icon-box purple"><i class="fas fa-brain"></i></div>
                             <div class="stat-info">
                                 <h3>AI Core / Box</h3>
-                                <span class="value"
+                                <span id="ai-status" class="value"
                                     style="font-size: 1.2rem; display: flex; align-items: center; gap: 8px;">
-                                    <span
-                                        style="width: 8px; height: 8px; background: #22c55e; border-radius: 50%;"></span>
-                                    Online
+                                    <span id="ai-status-indicator"
+                                        style="width: 8px; height: 8px; background: #71717a; border-radius: 50%;"></span>
+                                    <span id="ai-status-text">Đang kiểm tra...</span>
                                 </span>
-                                <small style="color: #71717a; font-size: 0.75rem;">Latency: 45ms</small>
+                                <small id="ai-latency" style="color: #71717a; font-size: 0.75rem;">Latency: --ms</small>
                             </div>
                         </div>
                         <div class="stat-card">
@@ -112,22 +130,16 @@
                         </div>
                     </div>
 
-                    <!-- Activity Log (New Mock) -->
+                    <!-- Activity Log (Dynamic - loaded from backend) -->
                     <div class="panel" style="margin-top: 20px;">
                         <div class="panel-header" style="margin-bottom: 10px;">
                             <h2><i class="fas fa-history"></i> Hoạt Động Gần Đây</h2>
                         </div>
-                        <div class="activity-log" style="font-size: 0.9rem; color: #d4d4d8;">
-                            <div style="padding: 8px 0; border-bottom: 1px solid #27272a; display: flex; gap: 10px;">
-                                <span style="color: #71717a;">10:05</span> <span>AI Trợ Giảng activated</span>
-                            </div>
-                            <div style="padding: 8px 0; border-bottom: 1px solid #27272a; display: flex; gap: 10px;">
-                                <span style="color: #71717a;">10:02</span> <span>Mode switched &rarr; <span
-                                        style="color: #22c55e;">Tự Nhiên</span></span>
-                            </div>
-                            <div style="padding: 8px 0; border-bottom: 1px solid #27272a; display: flex; gap: 10px;">
-                                <span style="color: #71717a;">09:58</span> <span>Glasses 01 connected (Battery
-                                    90%)</span>
+                        <div id="activity-log" class="activity-log" style="font-size: 0.9rem; color: #d4d4d8;">
+                            <div class="empty-state" style="padding: 20px; text-align: center;">
+                                <i class="fas fa-clock"
+                                    style="color: #71717a; font-size: 1.5rem; margin-bottom: 8px;"></i>
+                                <p style="color: #71717a; margin: 0;">Chưa có hoạt động nào được ghi nhận</p>
                             </div>
                         </div>
                     </div>
@@ -154,6 +166,66 @@
                         <div id="mic-transcription-area"
                             style="background: #09090b; border: 1px solid #27272a; border-radius: 8px; padding: 16px; min-height: 80px; max-height: 180px; overflow-y: auto; font-size: 0.95rem; line-height: 1.8;">
                             <p style="color: #71717a; text-align: center;">Chưa có dữ liệu thu âm</p>
+                        </div>
+                    </div>
+
+                    <!-- Document Upload Panel - Tài Liệu Bài Giảng -->
+                    <div class="panel" style="margin-top: 20px; border: 1px solid #8b5cf6;">
+                        <div class="panel-header" style="margin-bottom: 10px;">
+                            <h2 style="color: #8b5cf6;"><i class="fas fa-file-alt"></i> Tài Liệu Bài Giảng</h2>
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                <span id="doc-status"
+                                    style="display: flex; align-items: center; gap: 6px; padding: 4px 10px; background: rgba(113, 113, 122, 0.2); border-radius: 12px; font-size: 0.75rem; color: #a1a1aa;">
+                                    <i class="fas fa-file-circle-xmark"></i>
+                                    Chưa có tài liệu
+                                </span>
+                            </div>
+                        </div>
+
+                        <p style="color: #a1a1aa; font-size: 0.9rem; margin-bottom: 12px;">
+                            Upload tài liệu bài giảng để AI trả lời đúng ý bạn hơn (PDF, DOCX, TXT)
+                        </p>
+
+                        <!-- Current Document Info -->
+                        <div id="current-doc-info"
+                            style="display: none; background: rgba(139, 92, 246, 0.1); border: 1px solid #8b5cf6; border-radius: 8px; padding: 12px; margin-bottom: 12px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <div>
+                                    <span style="color: #c4b5fd; font-weight: 600;"
+                                        id="doc-filename">document.pdf</span>
+                                    <small style="color: #71717a; display: block; margin-top: 4px;" id="doc-info">1234
+                                        ký tự</small>
+                                </div>
+                                <button class="btn-secondary" onclick="clearDocument()"
+                                    style="padding: 6px 12px; font-size: 0.8rem; background: #ef4444;">
+                                    <i class="fas fa-trash"></i> Xóa
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Upload Area -->
+                        <div id="upload-area"
+                            style="border: 2px dashed #3f3f46; border-radius: 8px; padding: 24px; text-align: center; cursor: pointer; transition: all 0.2s;"
+                            onclick="document.getElementById('doc-file-input').click()"
+                            ondragover="event.preventDefault(); this.style.borderColor='#8b5cf6'; this.style.background='rgba(139,92,246,0.1)';"
+                            ondragleave="this.style.borderColor='#3f3f46'; this.style.background='transparent';"
+                            ondrop="handleFileDrop(event)">
+                            <i class="fas fa-cloud-upload-alt"
+                                style="font-size: 2rem; color: #8b5cf6; margin-bottom: 8px;"></i>
+                            <p style="color: #a1a1aa; margin: 0;">Click hoặc kéo thả file vào đây</p>
+                            <small style="color: #71717a;">Hỗ trợ: PDF, DOCX, TXT (tối đa 10MB)</small>
+                        </div>
+                        <input type="file" id="doc-file-input" accept=".pdf,.docx,.txt" style="display: none;"
+                            onchange="uploadDocument(this.files[0])">
+
+                        <!-- Upload Progress (hidden by default) -->
+                        <div id="upload-progress" style="display: none; margin-top: 12px;">
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                <div class="spinner"
+                                    style="width: 20px; height: 20px; border: 2px solid #3f3f46; border-top-color: #8b5cf6; border-radius: 50%; animation: spin 1s linear infinite;">
+                                </div>
+                                <span style="color: #a1a1aa;">Đang upload...</span>
+                            </div>
                         </div>
                     </div>
 

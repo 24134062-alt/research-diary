@@ -3,6 +3,7 @@ import logging
 import json
 import struct
 import argparse
+import os
 from typing import Optional
 
 # 3rd party
@@ -11,16 +12,29 @@ import paho.mqtt.client as mqtt
 
 from stt_engine import STTEngine
 
-# Configuration
-UDP_IP = "0.0.0.0"
-UDP_PORT = 12345
-MQTT_BROKER = "test.mosquitto.org"
-MQTT_PORT = 1883
-TOPIC_TEXT = "glasses/text"
-TOPIC_CONTROL = "audio/control"
-
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger("PCService")
+
+# Load Configuration
+CONFIG_PATH = "config.json"
+if os.path.exists(CONFIG_PATH):
+    with open(CONFIG_PATH, 'r') as f:
+        config = json.load(f)
+else:
+    # We can't use logger yet if it depends on basicConfig, but here basicConfig is called already
+    config = {
+        "mqtt": {"broker": "192.168.4.1", "port": 1883, "topics": {"text": "glasses/text", "control": "audio/control"}},
+        "udp": {"ip": "0.0.0.0", "port": 12345},
+        "stt": {"language": "vi-VN", "buffer_seconds": 3}
+    }
+    logger.warning("config.json not found, using defaults")
+
+UDP_IP = config["udp"]["ip"]
+UDP_PORT = config["udp"]["port"]
+MQTT_BROKER = config["mqtt"]["broker"]
+MQTT_PORT = config["mqtt"]["port"]
+TOPIC_TEXT = config["mqtt"]["topics"]["text"]
+TOPIC_CONTROL = config["mqtt"]["topics"]["control"]
 
 class AudioUDPServer:
     def __init__(self, stt_engine: STTEngine, mqtt_client: mqtt.Client):
@@ -33,15 +47,25 @@ class AudioUDPServer:
         logger.info(f"UDP Server started on {UDP_PORT}")
 
     def datagram_received(self, data, addr):
-        # Parse Protocol
-        # Header: Sequence Number (4 bytes)
-        if len(data) < 4:
+        # Parse Protocol (Matches ESP32 hardware header)
+        # Header: Sequence Number (4 bytes) + Flags (1 byte)
+        if len(data) < 5:
             return
         
         seq_num = struct.unpack('<I', data[:4])[0]
-        audio_payload = data[4:]
+        flags = data[4]
+        ai_mode = (flags & 0x01) != 0
+        audio_payload = data[5:]
         
-        # Forward to STT
+        # Dispatching logic:
+        # If AI mode is active, forward audio to AI Service (port 12346)
+        if ai_mode:
+            ai_service_addr = (UDP_IP, 12346)
+            self.transport.sendto(data, ai_service_addr)
+            # We don't transcribe logic here to save CPU, AI service handles it
+            return
+
+        # Forward to STT loop for teaching transcription
         text = self.stt_engine.process_audio(audio_payload)
         
         if text:
@@ -73,7 +97,10 @@ def on_mqtt_message(client, userdata, msg):
 
 async def main():
     # 1. Setup STT
-    stt = STTEngine()
+    stt = STTEngine(
+        language=config["stt"]["language"],
+        buffer_seconds=config["stt"]["buffer_seconds"]
+    )
 
     # 2. Setup MQTT
     client = mqtt.Client()

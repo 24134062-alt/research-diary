@@ -29,7 +29,7 @@ class WiFiMonitor:
         
     async def start_monitoring(self):
         """Start monitoring WiFi signal in background"""
-        print("📡 WiFi Monitor started")
+        print("[INFO] WiFi Monitor started")
         
         while True:
             try:
@@ -114,7 +114,7 @@ class WiFiMonitor:
         if current_level == self.previous_level:
             return
         
-        print(f"📶 Signal: {self.current_signal}% ({current_level.value}) - {self.current_ssid}")
+        print(f"[SIGNAL] Signal: {self.current_signal}% ({current_level.value}) - {self.current_ssid}")
         
         # Trigger appropriate callbacks
         if current_level == SignalLevel.CRITICAL:

@@ -4,18 +4,66 @@ from fastapi.responses import FileResponse
 import uvicorn
 import asyncio
 from pathlib import Path
+import time
 from .services.mqtt import MQTTService
+from .services.uart import UARTService
 from .services.wifi_monitor import WiFiMonitor
 from .services.hotspot import HotspotController
-from .routes import health, setup_wifi, stt, wifi_manager, system
+from .routes import health, setup_wifi, stt, wifi_manager, system, document
 
 app = FastAPI()
 mqtt_service = MQTTService()
+uart_service = UARTService() # Default to /dev/ttyS0
 wifi_monitor = WiFiMonitor()
 hotspot_controller = HotspotController()
 
+# In-memory activity log
+activity_log = []
+
+# In-memory transcription storage (Teacher speech & AI answers)
+transcription_history = []
+
+def add_activity(message, icon="info-circle"):
+    global activity_log
+    activity_log.insert(0, {"time": time.strftime("%H:%M:%S"), "message": message, "icon": icon})
+    activity_log = activity_log[:20] # Keep last 20
+
+def add_transcription(text, sender="teacher"):
+    """Adds a transcription entry to history"""
+    global transcription_history
+    entry = {
+        "time": time.strftime("%H:%M:%S"),
+        "text": text,
+        "sender": sender
+    }
+    transcription_history.insert(0, entry)
+    transcription_history = transcription_history[:30] # Keep last 30
+
 # Set services for wifi_manager router
 wifi_manager.set_services(wifi_monitor, hotspot_controller)
+
+# Set MQTT service for document router (để gửi tài liệu đến PC AI Service)
+document.set_mqtt_service(mqtt_service)
+
+# Link MQTT and UART for bi-directional bridge
+mqtt_service.set_uart_service(uart_service)
+
+# --- Hardware Bridge Configuration ---
+def bridge_uart_to_mqtt(data):
+    """Callback for UART messages -> Publish to MQTT"""
+    msg_type = data.get("type")
+    if msg_type in ["DEV_JOIN", "DEV_LEAVE"]:
+        # Bridge to hardware status topic
+        mqtt_service.publish("hardware/event", data)
+        print(f"[BRIDGE] UART -> MQTT: {data}")
+        action = "đã gia nhập" if msg_type == "DEV_JOIN" else "đã rời mạng"
+        add_activity(f"Thiết bị {data.get('device_id')} {action}", "microchip")
+    elif msg_type == "AUDIO_DATA":
+        # Specific bridging for high-speed audio data if needed
+        pass
+
+uart_service.set_callback(bridge_uart_to_mqtt)
+# -------------------------------------
 
 # Get absolute path to static directory
 BASE_DIR = Path(__file__).resolve().parent
@@ -30,11 +78,15 @@ app.include_router(setup_wifi.router, prefix="/api/wifi", tags=["WiFi Scan"])
 app.include_router(wifi_manager.router, prefix="/api/wifi-manager", tags=["WiFi Manager"])
 app.include_router(stt.router, prefix="/api", tags=["STT"])
 app.include_router(system.router, prefix="/api/system", tags=["System"])
+app.include_router(document.router, prefix="/api/document", tags=["Document"])
 
 @app.on_event("startup")
 async def startup_event():
     # Start MQTT Client in background
     asyncio.create_task(mqtt_service.start())
+    
+    # Start UART Service in background
+    asyncio.create_task(uart_service.start())
     
     # Start WiFi monitor in background
     asyncio.create_task(wifi_monitor.start_monitoring())
@@ -119,6 +171,10 @@ async def broadcast_tts(data: dict):
         "text": text,
         "glasses_count": len(glasses_devices)
     }
+
+@app.get("/api/activity-log")
+async def get_activity_log():
+    return activity_log
 
 # WiFi connect route moved to routes/setup_wifi.py
 

@@ -42,8 +42,21 @@ async def receive_stt(data: STTText):
         f"ts={ts}"
     )
 
-    # TODO: gọi router.class_text() hoặc router.private_text()
-    # router.route_text(data.mode, data.target, data.text)
+    # Add to global transcription history for dashboard
+    try:
+        from ..main import add_transcription
+        add_transcription(data.text, sender="teacher")
+    except Exception as e:
+        print(f"Failed to add STT transcription: {e}")
 
     return {"status": "ok"}
+
+@router.get("/stt/history")
+async def get_stt_history():
+    """Returns recent transcription history for the dashboard"""
+    try:
+        from ..main import transcription_history
+        return transcription_history
+    except Exception as e:
+        return []
 
