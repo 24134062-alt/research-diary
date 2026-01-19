@@ -22,6 +22,8 @@ static String rx_buffer;
 
 // ====== Forward declarations ======
 void handle_uart_line(const String &line);
+extern void
+text_downlink_handle(const String &jsonMessage); // From text_downlink.cpp
 
 // ====== Public API ======
 void uart_ctrl_init() {
@@ -50,6 +52,13 @@ void handle_uart_line(const String &line) {
 
   Serial.print("[UART][RX] ");
   Serial.println(line);
+
+  // Parse TEXT_DOWNLINK - Forward text to Glasses via MQTT
+  if (line.indexOf("\"type\":\"TEXT_DOWNLINK\"") >= 0) {
+    Serial.println("[UART] Forwarding text to glasses...");
+    text_downlink_handle(line);
+    return;
+  }
 
   // MVP: parse MODE_SET thủ công
   if (line.indexOf("\"type\":\"MODE_SET\"") >= 0) {

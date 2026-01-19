@@ -16,6 +16,8 @@ extern void audio_forward_init();
 extern void audio_forward_loop();
 extern void dev_gateway_init();
 extern void dev_gateway_loop();
+extern void text_downlink_init();
+extern void text_downlink_loop();
 
 // ====== Pin Definitions ======
 #define LED_PIN 2 // Status LED
@@ -42,6 +44,7 @@ void setup() {
   uart_ctrl_init();     // Giao tiếp với Raspberry Pi
   audio_forward_init(); // Forward audio
   dev_gateway_init();   // Quản lý thiết bị kết nối
+  text_downlink_init(); // Text forwarding qua MQTT
 
   Serial.println("-----------------------------------------");
   Serial.println("[READY] Box Controller is running!");
@@ -59,6 +62,7 @@ void loop() {
   uart_ctrl_loop();     // Xử lý UART với Raspberry
   audio_forward_loop(); // Forward audio
   dev_gateway_loop();   // Quản lý thiết bị
+  text_downlink_loop(); // Maintain MQTT connection
 
   // LED nhấp nháy để báo hiệu đang hoạt động
   if (millis() - lastBlink > 1000) {

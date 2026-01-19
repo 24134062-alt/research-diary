@@ -81,7 +81,9 @@ box/esp-32_box/
     ├── wifi_ap_sta.cpp    # WiFi AP mode
     ├── uart_ctrl.cpp      # UART với Raspberry Pi
     ├── audio_forward.cpp  # Forward audio
-    └── dev_gateway.cpp    # Quản lý thiết bị
+    ├── dev_gateway.cpp    # Quản lý thiết bị
+    ├── text_downlink.cpp  # ✅ Text forwarding qua MQTT
+    └── button.cpp         # (Placeholder - not used)
 ```
 
 ## Build & Flash

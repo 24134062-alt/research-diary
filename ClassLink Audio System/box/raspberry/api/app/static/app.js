@@ -699,9 +699,13 @@ function showNewIPModal(ssid, newUrl) {
                         <code id="new-url" style="font-size: 1.1rem; color: var(--primary);"></code>
                     </div>
                 </div>
+                <div id="auto-open-countdown" style="margin: 15px 0; padding: 12px; background: rgba(34, 197, 94, 0.1); border-radius: 8px; border: 1px solid #22c55e;">
+                    <i class="fas fa-circle-notch fa-spin" style="color: #22c55e;"></i>
+                    <span style="color: #22c55e; margin-left: 8px;">Đang tự động mở tab mới trong <span id="countdown-seconds">3</span>s...</span>
+                </div>
                 <div class="modal-actions" style="justify-content: center; gap: 12px;">
                     <button class="btn-primary" onclick="openNewUrl()">
-                        <i class="fas fa-external-link-alt"></i> Truy cập Web
+                        <i class="fas fa-external-link-alt"></i> Mở ngay
                     </button>
                     <button class="btn-secondary" onclick="copyNewUrl()">
                         <i class="fas fa-copy"></i> Sao chép
@@ -709,7 +713,7 @@ function showNewIPModal(ssid, newUrl) {
                     <button class="btn-ghost" onclick="closeNewIPModal()">Đóng</button>
                 </div>
                 <p style="margin-top: 15px; font-size: 0.85rem; color: var(--text-secondary);">
-                    ⚠️ Kết nối WiFi <span id="new-ssid-2" style="color: white;"></span> trên thiết bị của bạn trước khi truy cập.
+                    💡 Nhớ kết nối WiFi <span id="new-ssid-2" style="color: white;"></span> trên thiết bị trước khi truy cập
                 </p>
             </div>
         `;
@@ -723,6 +727,29 @@ function showNewIPModal(ssid, newUrl) {
     document.getElementById('new-ssid-2').textContent = ssid;
     document.getElementById('new-url').textContent = newUrl;
     modal.dataset.url = newUrl;
+
+    // Auto-open countdown
+    let countdown = 3;
+    const countdownEl = document.getElementById('countdown-seconds');
+    const countdownBox = document.getElementById('auto-open-countdown');
+
+    const countdownInterval = setInterval(() => {
+        countdown--;
+        if (countdownEl) countdownEl.textContent = countdown;
+
+        if (countdown <= 0) {
+            clearInterval(countdownInterval);
+            if (countdownBox) {
+                countdownBox.innerHTML = '<i class="fas fa-check-circle" style="color: #22c55e;"></i> <span style="color: #22c55e; margin-left: 8px;">Đã mở tab mới!</span>';
+            }
+            // Auto-open in new tab
+            window.open(newUrl, '_blank');
+            showToast('🌐 Đã mở trang web mới trong tab mới!', 'success');
+        }
+    }, 1000);
+
+    // Store interval ID to clear if modal is closed early
+    modal.dataset.countdownInterval = countdownInterval;
 }
 
 function openNewUrl() {
@@ -754,7 +781,14 @@ function copyNewUrl() {
 
 function closeNewIPModal() {
     const modal = document.getElementById('new-ip-modal');
-    if (modal) modal.classList.remove('active');
+    if (modal) {
+        // Clear countdown interval if exists
+        const intervalId = modal.dataset.countdownInterval;
+        if (intervalId) {
+            clearInterval(parseInt(intervalId));
+        }
+        modal.classList.remove('active');
+    }
 }
 
 // --- Disconnect WiFi with AP Mode Switch ---
