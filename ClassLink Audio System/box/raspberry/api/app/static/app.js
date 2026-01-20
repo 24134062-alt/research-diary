@@ -312,7 +312,10 @@ function closeChatModal() {
 function switchAITab(tabName) {
     // Hide all tab contents
     const allTabs = document.querySelectorAll('.ai-tab-content');
-    allTabs.forEach(tab => tab.classList.remove('active'));
+    allTabs.forEach(tab => {
+        tab.classList.remove('active');
+        tab.style.display = 'none'; // Force hide with inline style
+    });
 
     // Hide all tab buttons active state
     const allButtons = document.querySelectorAll('.ai-tab');
@@ -323,7 +326,9 @@ function switchAITab(tabName) {
     });
 
     // Show selected tab
-    document.getElementById(`tab-${tabName}`).classList.add('active');
+    const selectedTab = document.getElementById(`tab-${tabName}`);
+    selectedTab.classList.add('active');
+    selectedTab.style.display = 'block'; // Force show with inline style
 
     // Highlight selected button
     const activeButton = document.querySelector(`.ai-tab[data-tab="${tabName}"]`);
