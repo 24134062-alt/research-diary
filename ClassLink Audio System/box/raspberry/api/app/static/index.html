@@ -288,95 +288,279 @@
                 </div>
             </section>
 
-            <!-- Chat Assistant Modal (Large Overlay) -->
+            <!-- Chat Assistant Modal (Large Overlay) - IMPROVED VERSION -->
             <div id="chat-modal" class="modal chat-modal-overlay">
                 <div class="modal-content chat-modal-content">
-                    <div class="chat-header" style="flex-direction: column; align-items: flex-start; gap: 10px;">
+                    <!-- Header với Tabs -->
+                    <div class="chat-header"
+                        style="flex-direction: column; align-items: flex-start; gap: 12px; padding-bottom: 0;">
                         <div style="width: 100%; display: flex; justify-content: space-between; align-items: center;">
                             <div class="chat-title">
-                                <i class="fas fa-robot"></i>
+                                <i class="fas fa-robot" style="color: #8b5cf6;"></i>
                                 <div>
                                     <h3 style="font-weight: 700;">Giám Sát & AI Trợ Giảng</h3>
+                                    <p style="font-size: 0.75rem; color: #71717a; margin: 0;">Quản lý học sinh và tương
+                                        tác AI</p>
                                 </div>
                             </div>
                             <button class="btn-icon" onclick="closeChatModal()"><i class="fas fa-times"></i></button>
                         </div>
 
-                        <!-- AI Status Lines -->
-                        <div style="font-size: 0.85rem; color: #a1a1aa; width: 100%; padding-left: 36px;">
-                            <div style="display: flex; gap: 15px;">
-                                <span><i class="fas fa-circle" style="color: #22c55e; font-size: 0.6rem;"></i> AI Hỗ Trợ
-                                    Giáo Viên: <strong>Running (Background)</strong></span>
-                                <span><i class="fas fa-circle" style="color: #22c55e; font-size: 0.6rem;"></i> AI Trợ
-                                    Giảng: <strong>Online (Student-facing)</strong></span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="chat-body" style="display: flex; height: calc(85vh - 180px); overflow: hidden;">
-                        <!-- Left Sidebar: Session List -->
-                        <div class="chat-sidebar"
-                            style="width: 250px; background: #202023; border-right: 1px solid #3f3f46; display: flex; flex-direction: column;">
-                            <div style="padding: 10px; border-bottom: 1px solid #3f3f46;">
-                                <input type="text" placeholder="Tìm học sinh..."
-                                    style="width: 100%; padding: 8px; border-radius: 4px; border: 1px solid #3f3f46; background: #18181b; color: white;">
-                            </div>
-                            <div id="session-list" class="session-list" style="flex: 1; overflow-y: auto;">
-                                <!-- Session items will be injected here -->
-                            </div>
-                        </div>
-
-                        <!-- Right Main: Chat Area -->
-                        <div class="chat-main" style="flex: 1; display: flex; flex-direction: column;">
-                            <div id="chat-history" class="chat-history"
-                                style="flex: 1; overflow-y: auto; padding: 20px;">
-                                <!-- Messages injected here -->
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="chat-input-area">
-                        <!-- Broadcast Section -->
+                        <!-- Tab Navigation -->
                         <div
-                            style="background: rgba(251, 146, 60, 0.1); border: 1px solid #fb923c; border-radius: 8px; padding: 12px; margin-bottom: 12px;">
-                            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
-                                <i class="fas fa-bullhorn" style="color: #fb923c;"></i>
-                                <span style="color: #fb923c; font-weight: 600; font-size: 0.85rem;">📢 Broadcast TTS
-                                    (Gửi thẳng tới kính)</span>
-                            </div>
-                            <div style="display: flex; gap: 8px;">
-                                <input type="text" id="broadcast-input"
-                                    placeholder="Nhập thông báo gửi tới tất cả học sinh..."
-                                    style="flex: 1; padding: 10px 12px; background: #18181b; border: 1px solid #3f3f46; border-radius: 6px; color: white;"
-                                    onkeypress="if(event.key==='Enter') sendBroadcast()">
-                                <button class="btn-primary" onclick="sendBroadcast()"
-                                    style="background: #fb923c; padding: 10px 16px;">
-                                    <i class="fas fa-volume-up"></i> Gửi TTS
-                                </button>
-                            </div>
-                            <div style="margin-top: 8px; display: flex; gap: 6px;">
-                                <button class="chip" onclick="setBroadcast('Trật tự nào các em')"
-                                    style="background: #27272a; font-size: 0.75rem;">Trật tự</button>
-                                <button class="chip" onclick="setBroadcast('Giờ ra chơi rồi các em')"
-                                    style="background: #27272a; font-size: 0.75rem;">Ra chơi</button>
-                                <button class="chip" onclick="setBroadcast('Tập trung nghe giảng nào')"
-                                    style="background: #27272a; font-size: 0.75rem;">Tập trung</button>
+                            style="width: 100%; display: flex; gap: 8px; border-bottom: 1px solid #3f3f46; padding: 0 10px;">
+                            <button class="ai-tab active" data-tab="monitor" onclick="switchAITab('monitor')"
+                                style="padding: 10px 20px; background: none; border: none; border-bottom: 2px solid #8b5cf6; color: #8b5cf6; font-weight: 600; cursor: pointer;">
+                                <i class="fas fa-eye"></i> Giám Sát
+                            </button>
+                            <button class="ai-tab" data-tab="interact" onclick="switchAITab('interact')"
+                                style="padding: 10px 20px; background: none; border: none; border-bottom: 2px solid transparent; color: #71717a; font-weight: 600; cursor: pointer;">
+                                <i class="fas fa-comments"></i> Tương Tác
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Tab 1: Monitor (Giám Sát) -->
+                    <div id="tab-monitor" class="ai-tab-content active">
+                        <!-- AI Status Panel (Improved) -->
+                        <div
+                            style="padding: 16px; background: linear-gradient(135deg, rgba(139, 92, 246, 0.1), rgba(99, 102, 241, 0.05)); border-bottom: 1px solid #3f3f46;">
+                            <div style="display: flex; justify-content: space-around; gap: 20px;">
+                                <div style="flex: 1; text-align: center;">
+                                    <div
+                                        style="display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px; background: rgba(34, 197, 94, 0.2); border-radius: 20px; margin-bottom: 8px;">
+                                        <span
+                                            style="width: 10px; height: 10px; background: #22c55e; border-radius: 50%; animation: pulse 2s infinite;"></span>
+                                        <span
+                                            style="color: #22c55e; font-weight: 600; font-size: 0.85rem;">Online</span>
+                                    </div>
+                                    <p style="font-size: 0.75rem; color: #a1a1aa; margin: 0;">PC AI Service</p>
+                                    <p style="font-size: 0.7rem; color: #71717a; margin: 4px 0 0 0;">(Background
+                                        Processing)</p>
+                                </div>
+                                <div style="width: 1px; background: #3f3f46;"></div>
+                                <div style="flex: 1; text-align: center;">
+                                    <div
+                                        style="display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px; background: rgba(34, 197, 94, 0.2); border-radius: 20px; margin-bottom: 8px;">
+                                        <span
+                                            style="width: 10px; height: 10px; background: #22c55e; border-radius: 50%; animation: pulse 2s infinite;"></span>
+                                        <span style="color: #22c55e; font-weight: 600; font-size: 0.85rem;">Ready</span>
+                                    </div>
+                                    <p style="font-size: 0.75rem; color: #a1a1aa; margin: 0;">AI Trợ Giảng</p>
+                                    <p style="font-size: 0.7rem; color: #71717a; margin: 4px 0 0 0;">(Student-facing)
+                                    </p>
+                                </div>
+                                <div style="width: 1px; background: #3f3f46;"></div>
+                                <div style="flex: 1; text-align: center;">
+                                    <div
+                                        style="display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px; background: rgba(59, 130, 246, 0.2); border-radius: 20px; margin-bottom: 8px;">
+                                        <i class="fas fa-users" style="color: #3b82f6; font-size: 0.8rem;"></i>
+                                        <span style="color: #3b82f6; font-weight: 600; font-size: 0.85rem;"
+                                            id="active-students-count">0</span>
+                                    </div>
+                                    <p style="font-size: 0.75rem; color: #a1a1aa; margin: 0;">Học sinh hoạt động</p>
+                                    <p style="font-size: 0.7rem; color: #71717a; margin: 4px 0 0 0;">(Hôm nay)</p>
+                                </div>
                             </div>
                         </div>
 
-                        <!-- AI Chat Section -->
-                        <div style="margin-bottom: 8px; font-size: 0.75rem; color: #71717a; font-style: italic;">
-                            <i class="fas fa-robot"></i> Chat với AI Trợ Giảng (hỏi đáp học tập)
-                        </div>
-                        <div class="input-wrapper">
-                            <input type="text" id="chat-input" placeholder="Hỏi AI về bài học, công thức, kiến thức..."
-                                onkeypress="handleEnter(event)">
-                            <button class="btn-primary" onclick="sendMessage()"><i
-                                    class="fas fa-paper-plane"></i></button>
+                        <!-- Chat View -->
+                        <div class="chat-body" style="display: flex; height: calc(85vh - 280px); overflow: hidden;">
+                            <!-- Left Sidebar: Session List -->
+                            <div class="chat-sidebar"
+                                style="width: 280px; background: #202023; border-right: 1px solid #3f3f46; display: flex; flex-direction: column;">
+                                <div style="padding: 12px; border-bottom: 1px solid #3f3f46;">
+                                    <input type="text" id="session-search" placeholder="🔍 Tìm học sinh..."
+                                        style="width: 100%; padding: 10px 12px; border-radius: 6px; border: 1px solid #3f3f46; background: #18181b; color: white; font-size: 0.85rem;">
+                                </div>
+                                <div id="session-list" class="session-list" style="flex: 1; overflow-y: auto;">
+                                    <!-- Empty State -->
+                                    <div class="empty-state" style="padding: 40px 20px; text-align: center;">
+                                        <i class="fas fa-user-graduate"
+                                            style="font-size: 3rem; color: #3f3f46; margin-bottom: 16px;"></i>
+                                        <h4 style="color: #a1a1aa; margin-bottom: 8px;">Chưa có học sinh nào</h4>
+                                        <p style="font-size: 0.8rem; color: #71717a; line-height: 1.5;">
+                                            Học sinh có thể nhấn nút AI trên kính để đặt câu hỏi.
+                                            Danh sách sẽ hiển thị tại đây.
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Right Main: Chat Area -->
+                            <div class="chat-main"
+                                style="flex: 1; display: flex; flex-direction: column; background: #18181b;">
+                                <div id="chat-history" class="chat-history"
+                                    style="flex: 1; overflow-y: auto; padding: 20px;">
+                                    <!-- Empty State -->
+                                    <div class="empty-state"
+                                        style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; text-align: center;">
+                                        <i class="fas fa-comments"
+                                            style="font-size: 4rem; color: #3f3f46; margin-bottom: 20px;"></i>
+                                        <h3 style="color: #e4e4e7; margin-bottom: 12px;">Chưa có hội thoại nào</h3>
+                                        <p
+                                            style="font-size: 0.9rem; color: #a1a1aa; max-width: 400px; line-height: 1.6;">
+                                            Chọn một học sinh từ danh sách bên trái để xem hội thoại.<br>
+                                            Hoặc đợi học sinh nhấn nút AI trên kính để đặt câu hỏi.
+                                        </p>
+                                        <div
+                                            style="margin-top: 24px; padding: 12px 20px; background: rgba(139, 92, 246, 0.1); border-radius: 8px; border: 1px dashed #8b5cf6;">
+                                            <p style="font-size: 0.8rem; color: #a78bfa; margin: 0;">
+                                                💡 <strong>Mẹo:</strong> Học sinh cần kết nối vào WiFi
+                                                "<strong>CLASS-BOX</strong>" để sử dụng AI
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
+
+                    <!-- Tab 2: Interact (Tương Tác) -->
+                    <div id="tab-interact" class="ai-tab-content" style="display: none;">
+                        <div style="padding: 20px; height: calc(85vh - 180px); overflow-y: auto;">
+                            <!-- Broadcast Section (Improved) -->
+                            <div
+                                style="background: linear-gradient(135deg, rgba(251, 146, 60, 0.15), rgba(251, 146, 60, 0.05)); border: 1px solid #fb923c; border-radius: 12px; padding: 20px; margin-bottom: 24px;">
+                                <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
+                                    <div
+                                        style="width: 40px; height: 40px; background: #fb923c; border-radius: 10px; display: flex; align-items: center; justify-content: center;">
+                                        <i class="fas fa-bullhorn" style="color: white; font-size: 1.2rem;"></i>
+                                    </div>
+                                    <div>
+                                        <h3 style="color: #fb923c; margin: 0; font-size: 1rem;">Broadcast TTS</h3>
+                                        <p style="font-size: 0.75rem; color: #a1a1aa; margin: 4px 0 0 0;">Gửi thông báo
+                                            đến tất cả kính học sinh</p>
+                                    </div>
+                                </div>
+                                <div style="display: flex; gap: 10px; margin-bottom: 12px;">
+                                    <input type="text" id="broadcast-input"
+                                        placeholder="VD: Ra chơi 10 phút, Tập trung nghe giảng..."
+                                        style="flex: 1; padding: 12px 16px; background: #18181b; border: 1px solid #3f3f46; border-radius: 8px; color: white; font-size: 0.9rem;"
+                                        onkeypress="if(event.key==='Enter') sendBroadcast()">
+                                    <button class="btn-primary" onclick="sendBroadcast()"
+                                        style="background: #fb923c; padding: 12px 24px; font-weight: 600;">
+                                        <i class="fas fa-volume-up"></i> Gửi TTS
+                                    </button>
+                                </div>
+                                <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                                    <span
+                                        style="font-size: 0.75rem; color: #71717a; width: 100%; margin-bottom: 4px;">Mẫu
+                                        nhanh:</span>
+                                    <button class="chip" onclick="setBroadcast('Trật tự nào các em')"
+                                        style="background: rgba(251, 146, 60, 0.2); color: #fb923c; border: 1px solid #fb923c; font-size: 0.75rem; padding: 6px 12px;">📝
+                                        Trật tự</button>
+                                    <button class="chip" onclick="setBroadcast('Giờ ra chơi rồi các em')"
+                                        style="background: rgba(251, 146, 60, 0.2); color: #fb923c; border: 1px solid #fb923c; font-size: 0.75rem; padding: 6px 12px;">🎯
+                                        Ra chơi</button>
+                                    <button class="chip" onclick="setBroadcast('Tập trung nghe giảng nào')"
+                                        style="background: rgba(251, 146, 60, 0.2); color: #fb923c; border: 1px solid #fb923c; font-size: 0.75rem; padding: 6px 12px;">📚
+                                        Tập trung</button>
+                                    <button class="chip" onclick="setBroadcast('Chuẩn bị nộp bài tập')"
+                                        style="background: rgba(251, 146, 60, 0.2); color: #fb923c; border: 1px solid #fb923c; font-size: 0.75rem; padding: 6px 12px;">📋
+                                        Nộp bài</button>
+                                </div>
+                            </div>
+
+                            <!-- Teacher AI Chat Section (Improved) -->
+                            <div
+                                style="background: linear-gradient(135deg, rgba(139, 92, 246, 0.15), rgba(139, 92, 246, 0.05)); border: 1px solid #8b5cf6; border-radius: 12px; padding: 20px;">
+                                <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
+                                    <div
+                                        style="width: 40px; height: 40px; background: #8b5cf6; border-radius: 10px; display: flex; align-items: center; justify-content: center;">
+                                        <i class="fas fa-robot" style="color: white; font-size: 1.2rem;"></i>
+                                    </div>
+                                    <div>
+                                        <h3 style="color: #8b5cf6; margin: 0; font-size: 1rem;">Chat với AI Trợ Giảng
+                                        </h3>
+                                        <p style="font-size: 0.75rem; color: #a1a1aa; margin: 4px 0 0 0;">Hỏi đáp về bài
+                                            học, công thức, kiến thức</p>
+                                    </div>
+                                </div>
+
+                                <!-- Teacher Chat History -->
+                                <div id="teacher-chat-history"
+                                    style="max-height: 300px; overflow-y: auto; margin-bottom: 16px; padding: 12px; background: #18181b; border-radius: 8px;">
+                                    <!-- Empty State -->
+                                    <div class="empty-state" style="text-align: center; padding: 30px 20px;">
+                                        <i class="fas fa-lightbulb"
+                                            style="font-size: 2.5rem; color: #3f3f46; margin-bottom: 12px;"></i>
+                                        <p style="font-size: 0.85rem; color: #a1a1aa; margin: 0;">
+                                            Hỏi AI để chuẩn bị bài giảng hoặc tra cứu thông tin.<br>
+                                            <span style="font-size: 0.75rem; color: #71717a;">VD: "Công thức tính diện
+                                                tích hình tròn?"</span>
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <div class="input-wrapper" style="display: flex; gap: 10px;">
+                                    <input type="text" id="chat-input"
+                                        placeholder="Hỏi AI: Công thức, kiến thức, bài tập..."
+                                        style="flex: 1; padding: 12px 16px; background: #18181b; border: 1px solid #3f3f46; border-radius: 8px; color: white; font-size: 0.9rem;"
+                                        onkeypress="handleEnter(event)">
+                                    <button class="btn-primary" onclick="sendMessage()"
+                                        style="background: #8b5cf6; padding: 12px 24px; font-weight: 600;">
+                                        <i class="fas fa-paper-plane"></i> Gửi
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                 </div>
             </div>
+
+            <style>
+                /* Pulse animation for status indicators */
+                @keyframes pulse {
+
+                    0%,
+                    100% {
+                        opacity: 1;
+                    }
+
+                    50% {
+                        opacity: 0.5;
+                    }
+                }
+
+                /* AI Tab styles */
+                .ai-tab {
+                    transition: all 0.3s ease;
+                }
+
+                .ai-tab:hover {
+                    color: #a78bfa !important;
+                }
+
+                .ai-tab.active {
+                    color: #8b5cf6 !important;
+                    border-bottom-color: #8b5cf6 !important;
+                }
+
+                .ai-tab-content {
+                    display: none;
+                }
+
+                .ai-tab-content.active {
+                    display: block;
+                }
+
+                /* Session item hover */
+                .session-item:hover {
+                    background: rgba(139, 92, 246, 0.1);
+                }
+
+                /* Chip button improvements */
+                .chip {
+                    transition: all 0.2s ease;
+                }
+
+                .chip:hover {
+                    transform: translateY(-2px);
+                    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+                }
+            </style>
 
             <!-- Settings info (Placeholder) -->
             <section id="view-settings" class="view-section">

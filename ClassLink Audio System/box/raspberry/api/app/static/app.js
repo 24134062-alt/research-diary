@@ -308,6 +308,30 @@ function closeChatModal() {
     }
 }
 
+// Switch between AI tabs (Monitor / Interact)
+function switchAITab(tabName) {
+    // Hide all tab contents
+    const allTabs = document.querySelectorAll('.ai-tab-content');
+    allTabs.forEach(tab => tab.classList.remove('active'));
+
+    // Hide all tab buttons active state
+    const allButtons = document.querySelectorAll('.ai-tab');
+    allButtons.forEach(btn => {
+        btn.classList.remove('active');
+        btn.style.borderBottomColor = 'transparent';
+        btn.style.color = '#71717a';
+    });
+
+    // Show selected tab
+    document.getElementById(`tab-${tabName}`).classList.add('active');
+
+    // Highlight selected button
+    const activeButton = document.querySelector(`.ai-tab[data-tab="${tabName}"]`);
+    activeButton.classList.add('active');
+    activeButton.style.borderBottomColor = '#8b5cf6';
+    activeButton.style.color = '#8b5cf6';
+}
+
 async function fetchChatHistory() {
     if (!isChatOpen) return;
     try {
