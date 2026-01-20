@@ -61,11 +61,13 @@
                 <div class="global-actions" role="toolbar" aria-label="Công cụ nhanh">
                     <!-- AI Assistant Button with Capybara Mascot Overlay -->
                     <div class="ai-button-container">
-                        <!-- Capybara Head peeking over the button -->
-                        <img src="/static/capybara-head.png" alt="" class="capybara-overlay" aria-hidden="true">
+                        <!-- Capybara icon peeking over the button -->
+                        <img src="/static/images/capybara-icon.png" alt="" class="capybara-overlay" aria-hidden="true"
+                            style="position: absolute; top: -20px; left: 50%; transform: translateX(-50%); width: 40px; height: 40px; object-fit: contain; z-index: 10; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3)); pointer-events: none;">
                         <!-- Actual clickable button -->
                         <button class="btn-primary ai-btn" onclick="openChatModal()"
-                            aria-label="Mở Giám Sát và Trợ Lý AI" aria-haspopup="dialog">
+                            aria-label="Mở Giám Sát và Trợ Lý AI" aria-haspopup="dialog"
+                            style="position: relative; padding-top: 16px;">
                             <span>Trợ Lý AI</span>
                         </button>
                         <!-- Notification Badge -->
