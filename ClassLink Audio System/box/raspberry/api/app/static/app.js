@@ -774,6 +774,13 @@ function showNewIPModal(ssid, newUrl) {
             // Auto-open in new tab
             window.open(newUrl, '_blank');
             showToast('🌐 Đã mở trang web mới trong tab mới!', 'success');
+
+            // AUTO-SWITCH TO DASHBOARD AFTER 1 SECOND
+            setTimeout(() => {
+                closeNewIPModal();
+                showView('view-dashboard'); // Chuyển về tab Dashboard
+                showToast('📊 Đã chuyển về Dashboard', 'info');
+            }, 1000);
         }
     }, 1000);
 
