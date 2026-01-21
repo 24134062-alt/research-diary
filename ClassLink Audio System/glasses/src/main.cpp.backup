@@ -9,8 +9,6 @@
  * - Nút 2 (GPIO 33): Toggle AI Trợ Giảng
  *
  * Kết nối WiFi tới ESP32 Box (CLASS-BOX)
- *
- * UPDATED: Fixed display blocking issues (non-blocking display)
  *************************************************/
 
 #include <Adafruit_GFX.h>
@@ -74,20 +72,6 @@ int queueHead = 0;             // Vị trí đọc
 int queueTail = 0;             // Vị trí ghi
 bool isDisplayingText = false; // Đang hiển thị text?
 
-// ====== Non-blocking Display State Machine ======
-enum DisplayState {
-  DISPLAY_IDLE,         // Không hiển thị gì
-  DISPLAY_SHOWING_CHAR, // Đang hiển thị từng ký tự
-  DISPLAY_WAITING_END   // Đợi 3 giây trước khi quay về status
-};
-
-DisplayState displayState = DISPLAY_IDLE;
-unsigned long lastDisplayUpdate = 0;
-int currentCharIndex = 0;
-int currentWordIndex = 0;
-String currentMessageWords[100];
-int currentMessageWordCount = 0;
-
 // Queue functions
 bool queueIsEmpty() { return queueHead == queueTail; }
 bool queueIsFull() {
@@ -133,27 +117,8 @@ void reconnectMQTT();
 void handleButtons();
 void sendAudioPacket();
 void updateDisplay();
-void startDisplayText(const char *text);
-void updateDisplayText();
+void displayText(const char *text);
 void processMessageQueue();
-
-// ====== UTF-8 Helper Functions ======
-// Đếm số ký tự UTF-8 thực tế (không phải bytes)
-int utf8CharCount(const String &str) {
-  int count = 0;
-  for (int i = 0; i < str.length(); i++) {
-    // Byte đầu của ký tự UTF-8 không có pattern 10xxxxxx
-    if ((str[i] & 0xC0) != 0x80)
-      count++;
-  }
-  return count;
-}
-
-// Ước lượng display width (pixels) cho string UTF-8
-int getDisplayWidth(const String &str, int textSize) {
-  // Mỗi ký tự UTF-8 ~ 6 pixels với font mặc định
-  return utf8CharCount(str) * 6 * textSize;
-}
 
 // ====== Setup ======
 void setup() {
@@ -212,9 +177,6 @@ void loop() {
 
   // Handle button presses
   handleButtons();
-
-  // Update non-blocking display
-  updateDisplayText();
 
   // Process message queue (non-blocking)
   processMessageQueue();
@@ -367,10 +329,8 @@ void handleButtons() {
       // Publish mode change
       mqtt.publish("glasses/mode", classMode ? "class" : "private");
 
-      // Update display nếu không đang hiển thị text
-      if (displayState == DISPLAY_IDLE) {
-        updateDisplay();
-      }
+      // Update display
+      updateDisplay();
 
       lastBtnModePress = millis();
     }
@@ -386,10 +346,8 @@ void handleButtons() {
       // Publish AI state
       mqtt.publish("glasses/ai", aiAssistantActive ? "on" : "off");
 
-      // Update display nếu không đang hiển thị text
-      if (displayState == DISPLAY_IDLE) {
-        updateDisplay();
-      }
+      // Update display
+      updateDisplay();
 
       lastBtnAIPress = millis();
     }
@@ -435,7 +393,8 @@ void updateDisplay() {
   display.display();
 }
 
-// ====== Non-blocking Display Text with Typewriter Scroll Effect ======
+// ====== Display Text with Typewriter Scroll Effect ======
+// Chữ hiện từng ký tự, khi hết màn hình thì scroll lên
 
 // Display constants - tính toán tự động từ screen parameters
 #define TEXT_SIZE 2
@@ -480,121 +439,72 @@ void refreshDisplayText() {
   display.display();
 }
 
-// Bắt đầu hiển thị text (non-blocking)
-void startDisplayText(const char *text) {
+void displayText(const char *text) {
   String textStr = String(text);
 
-  Serial.printf("[DISPLAY] Starting text: %s\n", text);
-
-  // Reset state
-  displayState = DISPLAY_SHOWING_CHAR;
-  currentCharIndex = 0;
-  currentWordIndex = 0;
-  currentMessageWordCount = 0;
-  isDisplayingText = true;
+  Serial.printf("[DISPLAY] Text: %s\n", text);
 
   clearDisplayBuffer();
   refreshDisplayText();
 
   // Tách thành các từ
+  int wordCount = 0;
+  String words[100];
+
   int startIdx = 0;
   for (int i = 0; i <= textStr.length(); i++) {
     if (i == textStr.length() || textStr[i] == ' ') {
       if (i > startIdx) {
-        currentMessageWords[currentMessageWordCount++] =
-            textStr.substring(startIdx, i);
+        words[wordCount++] = textStr.substring(startIdx, i);
       }
       startIdx = i + 1;
     }
   }
 
-  Serial.printf("[DISPLAY] Split into %d words\n", currentMessageWordCount);
-  lastDisplayUpdate = millis();
-}
+  // Hiển thị từng từ với typewriter effect
+  for (int w = 0; w < wordCount; w++) {
+    String word = words[w];
 
-// Update display state (gọi từ loop)
-void updateDisplayText() {
-  if (displayState == DISPLAY_IDLE) {
-    return; // Không có gì để hiển thị
-  }
+    // Kiểm tra xem từ có fit trên dòng hiện tại không
+    String testLine =
+        currentLineBuffer.length() == 0 ? word : currentLineBuffer + " " + word;
 
-  unsigned long now = millis();
+    if (testLine.length() > CHARS_PER_LINE) {
+      // Không fit - lưu dòng hiện tại và xuống dòng mới
+      displayLines[currentLineIdx] = currentLineBuffer;
+      currentLineIdx++;
 
-  if (displayState == DISPLAY_SHOWING_CHAR) {
-    // Kiểm tra xem đã đến lúc hiển thị ký tự tiếp theo chưa
-    if (now - lastDisplayUpdate < CHAR_DELAY_MS) {
-      return; // Chưa đến lúc
-    }
-
-    // Đến lúc hiển thị ký tự/từ tiếp theo
-    if (currentWordIndex >= currentMessageWordCount) {
-      // Hết từ - chuyển sang chế độ chờ
-      displayState = DISPLAY_WAITING_END;
-      lastDisplayUpdate = now;
-      Serial.println("[DISPLAY] Finished showing all text");
-      return;
-    }
-
-    String word = currentMessageWords[currentWordIndex];
-
-    // Nếu đang ở đầu từ mới
-    if (currentCharIndex == 0) {
-      // Kiểm tra xem từ có fit trên dòng hiện tại không
-      String testLine = currentLineBuffer.length() == 0
-                            ? word
-                            : currentLineBuffer + " " + word;
-
-      // Sử dụng UTF-8 aware length check
-      int testLineChars = utf8CharCount(testLine);
-
-      if (testLineChars > CHARS_PER_LINE) {
-        // Không fit - lưu dòng hiện tại và xuống dòng mới
-        displayLines[currentLineIdx] = currentLineBuffer;
-        currentLineIdx++;
-
-        // Nếu hết màn hình - scroll lên
-        if (currentLineIdx >= LINES_PER_SCREEN) {
-          scrollUpDisplay();
-          currentLineIdx = LINES_PER_SCREEN - 1;
-        }
-
-        currentLineBuffer = "";
+      // Nếu hết màn hình - scroll lên
+      if (currentLineIdx >= LINES_PER_SCREEN) {
+        scrollUpDisplay();
+        currentLineIdx = LINES_PER_SCREEN - 1;
       }
 
-      // Thêm khoảng trắng nếu không phải đầu dòng
-      if (currentLineBuffer.length() > 0) {
-        currentLineBuffer += " ";
-        displayLines[currentLineIdx] = currentLineBuffer;
-        refreshDisplayText();
-        lastDisplayUpdate = now;
-        currentCharIndex = -1; // Signal để lần sau add ký tự
-        return;
-      }
+      currentLineBuffer = "";
     }
 
-    // Thêm ký tự tiếp theo của từ
-    if (currentCharIndex >= 0 && currentCharIndex < word.length()) {
-      currentLineBuffer += word[currentCharIndex];
+    // Thêm khoảng trắng nếu không phải đầu dòng
+    if (currentLineBuffer.length() > 0) {
+      currentLineBuffer += " ";
       displayLines[currentLineIdx] = currentLineBuffer;
       refreshDisplayText();
-      currentCharIndex++;
-      lastDisplayUpdate = now;
-
-      // Kiểm tra xem hết từ chưa
-      if (currentCharIndex >= word.length()) {
-        currentWordIndex++;
-        currentCharIndex = 0;
-      }
+      delay(CHAR_DELAY_MS);
     }
-  } else if (displayState == DISPLAY_WAITING_END) {
-    // Đợi 3 giây trước khi quay về màn hình status
-    if (now - lastDisplayUpdate >= END_DISPLAY_DELAY_MS) {
-      Serial.println("[DISPLAY] Returning to status screen");
-      updateDisplay();
-      displayState = DISPLAY_IDLE;
-      isDisplayingText = false;
+
+    // Hiển thị từng ký tự của từ
+    for (int c = 0; c < word.length(); c++) {
+      currentLineBuffer += word[c];
+      displayLines[currentLineIdx] = currentLineBuffer;
+      refreshDisplayText();
+      delay(CHAR_DELAY_MS);
     }
   }
+
+  // Giữ màn hình 3 giây sau khi hiển thị xong
+  delay(3000);
+
+  // Quay về màn hình status
+  updateDisplay();
 }
 
 // ====== Send Audio Packet ======
@@ -625,15 +535,17 @@ void sendAudioPacket() {
 // ====== Process Message Queue ======
 // Non-blocking: Kiểm tra và hiển thị message tiếp theo từ queue
 void processMessageQueue() {
-  // Chỉ bắt đầu message mới nếu đang IDLE
-  if (displayState != DISPLAY_IDLE || queueIsEmpty()) {
+  // Nếu đang hiển thị hoặc queue rỗng thì bỏ qua
+  if (isDisplayingText || queueIsEmpty()) {
     return;
   }
 
   // Lấy message tiếp theo từ queue
   String msg = queuePop();
   if (msg.length() > 0) {
+    isDisplayingText = true;
     Serial.printf("[QUEUE] Processing message: %s\n", msg.c_str());
-    startDisplayText(msg.c_str()); // Non-blocking!
+    displayText(msg.c_str());
+    isDisplayingText = false;
   }
 }
