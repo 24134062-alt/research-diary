@@ -13,6 +13,38 @@ ssh pi@<IP>
 
 ---
 
+## 🌐 Bước 1.5: Setup mDNS (KHUYẾN NGHỊ - Chỉ cần làm 1 lần)
+
+**Vấn đề**: IP thay đổi mỗi khi đổi WiFi → Khó truy cập  
+**Giải pháp**: Dùng tên miền `.local` cố định → Truy cập `http://classlink.local:8000`
+
+### Cài đặt tự động:
+
+```bash
+# SSH vào Pi
+ssh pi@<IP>
+
+# Download và chạy script
+cd /opt/classlink
+sudo bash box/raspberry/setup_mdns.sh
+
+# Sau khi setup xong, reboot Pi
+sudo reboot
+```
+
+### Sau khi reboot:
+
+✅ **Truy cập bằng tên miền** thay vì IP:
+```
+http://classlink.local:8000
+```
+
+✅ **Hoạt động với mọi WiFi** - không cần biết IP nữa!
+
+> **Lưu ý Windows**: Cần cài [Bonjour](https://support.apple.com/kb/DL999) (hoặc iTunes có sẵn Bonjour)
+
+---
+
 ## 📂 Bước 2: Copy file app.js mới lên Pi
 
 ### Cách 1: Dùng SCP (từ Windows PowerShell)
