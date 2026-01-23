@@ -278,7 +278,64 @@ function showView(viewId) {
     // Fetch system info when opening settings
     if (viewId === 'view-settings') {
         fetchSystemInfo();
+        fetchNetworkInfo();
     }
+}
+
+// --- Network Information Functions ---
+async function fetchNetworkInfo() {
+    try {
+        const res = await fetch(`${API_URL}/api/system/network-info`);
+        const data = await res.json();
+
+        // Update primary IP display
+        const primaryIP = data.primary_ip || 'Unknown';
+        document.getElementById('primary-ip').textContent = primaryIP;
+        document.getElementById('primary-ip-copy').textContent = primaryIP;
+
+        // Update network interfaces list
+        const container = document.getElementById('network-interfaces');
+        if (!container) return;
+
+        if (!data.interfaces || data.interfaces.length === 0) {
+            container.innerHTML = '<p style="color: #71717a; text-align: center; padding: 16px;">Không có kết nối mạng nào</p>';
+            return;
+        }
+
+        container.innerHTML = data.interfaces.map(iface => `
+            <div style="padding: 12px; background: rgba(255,255,255,0.03); border-radius: 8px; margin-bottom: 8px;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <strong style="color: #e4e4e7;">${iface.name}</strong>
+                        <span style="margin-left: 8px; padding: 2px 8px; background: ${iface.state === 'UP' ? 'rgba(34, 197, 94, 0.2)' : 'rgba(113, 113, 122, 0.2)'}; color: ${iface.state === 'UP' ? '#86efac' : '#a1a1aa'}; border-radius: 12px; font-size: 0.7rem;">${iface.state}</span>
+                    </div>
+                    <div style="font-family: 'Consolas', monospace; color: #a1a1aa;">${iface.ips.join(', ')}</div>
+                </div>
+            </div>
+        `).join('');
+
+    } catch (e) {
+        console.error("Failed to fetch network info", e);
+        document.getElementById('primary-ip').textContent = 'Lỗi kết nối';
+    }
+}
+
+function copyIP() {
+    const ip = document.getElementById('primary-ip-copy').textContent;
+    const url = `http://${ip}:8000`;
+
+    navigator.clipboard.writeText(url).then(() => {
+        showToast('✅ Đã sao chép địa chỉ: ' + url, 'success');
+    }).catch(() => {
+        // Fallback for older browsers
+        const tempInput = document.createElement('input');
+        tempInput.value = url;
+        document.body.appendChild(tempInput);
+        tempInput.select();
+        document.execCommand('copy');
+        document.body.removeChild(tempInput);
+        showToast('✅ Đã sao chép địa chỉ: ' + url, 'success');
+    });
 }
 
 // --- Chat & Assistant Logic (Messenger Style) ---

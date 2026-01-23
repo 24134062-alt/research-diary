@@ -132,6 +132,70 @@ async def get_system_info():
         }
 
 
+@router.get("/network-info")
+async def get_network_info():
+    """Get network interface information including IP addresses"""
+    try:
+        # Get all network interfaces using 'ip addr' command
+        result = subprocess.run(
+            ["ip", "-j", "addr", "show"],
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+        
+        if result.returncode != 0:
+            # Fallback to hostname -I
+            fallback = subprocess.run(
+                ["hostname", "-I"],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            ips = fallback.stdout.strip().split() if fallback.returncode == 0 else []
+            return {
+                "interfaces": [],
+                "all_ips": ips,
+                "primary_ip": ips[0] if ips else "Unknown"
+            }
+        
+        import json
+        interfaces_data = json.loads(result.stdout)
+        
+        interfaces = []
+        all_ips = []
+        
+        for iface in interfaces_data:
+            if_name = iface.get("ifname", "unknown")
+            # Skip loopback
+            if if_name == "lo":
+                continue
+            
+            addrs = iface.get("addr_info", [])
+            ipv4_addrs = [addr["local"] for addr in addrs if addr.get("family") == "inet"]
+            
+            if ipv4_addrs:
+                interfaces.append({
+                    "name": if_name,
+                    "ips": ipv4_addrs,
+                    "state": iface.get("operstate", "unknown")
+                })
+                all_ips.extend(ipv4_addrs)
+        
+        return {
+            "interfaces": interfaces,
+            "all_ips": all_ips,
+            "primary_ip": all_ips[0] if all_ips else "No IP assigned"
+        }
+        
+    except Exception as e:
+        return {
+            "interfaces": [],
+            "all_ips": [],
+            "primary_ip": f"Error: {str(e)}"
+        }
+
+
 @router.get("/pc-installer")
 async def download_pc_installer():
     """Download PC AI Service installer as ZIP"""
