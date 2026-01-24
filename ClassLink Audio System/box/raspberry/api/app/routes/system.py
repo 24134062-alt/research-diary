@@ -71,7 +71,7 @@ async def update_code(action: AdminAction):
         
         # Git pull
         result = subprocess.run(
-            ["git", "pull", "origin", "main"],
+            ["/usr/bin/git", "pull", "origin", "main"],
             cwd=repo_dir,
             capture_output=True,
             text=True,
@@ -107,14 +107,14 @@ async def get_system_info():
         repo_dir = Path(__file__).resolve().parent.parent.parent.parent.parent
         
         branch_result = subprocess.run(
-            ["git", "branch", "--show-current"],
+            ["/usr/bin/git", "branch", "--show-current"],
             cwd=repo_dir,
             capture_output=True,
             text=True
         )
         
         commit_result = subprocess.run(
-            ["git", "log", "-1", "--format=%h - %s (%ar)"],
+            ["/usr/bin/git", "log", "-1", "--format=%h - %s (%ar)"],
             cwd=repo_dir,
             capture_output=True,
             text=True
