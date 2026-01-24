@@ -500,14 +500,31 @@ async def disconnect_wifi():
 async def scan_wifi_iwlist():
     """Fallback scanning using iwlist"""
     wifi_networks = []
-    try:
-        # Run iwlist scan
-        result = subprocess.check_output(
-            ["sudo", "iwlist", "wlan0", "scan"],
-            stderr=subprocess.STDOUT,
-            timeout=15
-        )
-        output = result.decode("utf-8", errors="ignore")
+    
+    # Try different command combinations
+    commands = [
+        ["iwlist", "wlan0", "scan"],  # Try without sudo first
+        ["/usr/bin/sudo", "iwlist", "wlan0", "scan"],  # Absolute path to sudo
+        ["/usr/sbin/iwlist", "wlan0", "scan"],  # Absolute path to iwlist
+        ["/usr/bin/sudo", "/usr/sbin/iwlist", "wlan0", "scan"],  # Both absolute
+    ]
+    
+    output = None
+    for cmd in commands:
+        try:
+            result = subprocess.check_output(
+                cmd,
+                stderr=subprocess.STDOUT,
+                timeout=15
+            )
+            output = result.decode("utf-8", errors="ignore")
+            print(f"[WiFi iwlist] Success with command: {' '.join(cmd)}")
+            break
+        except (FileNotFoundError, subprocess.CalledProcessError) as e:
+            continue
+    
+    if not output:
+        raise Exception("All iwlist command variations failed")
         
         seen_ssids = set()
         current_network = {}
