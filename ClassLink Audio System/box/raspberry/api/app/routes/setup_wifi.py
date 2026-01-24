@@ -524,8 +524,10 @@ async def scan_wifi_iwlist():
             continue
     
     if not output:
-        raise Exception("All iwlist command variations failed")
-        
+        print("[WiFi iwlist] All command variations failed")
+        return [{"ssid": "❌ No WiFi manager found", "signal": 0, "secure": False}]
+    
+    try:
         seen_ssids = set()
         current_network = {}
         
@@ -573,5 +575,5 @@ async def scan_wifi_iwlist():
         return wifi_networks
         
     except Exception as e:
-        print(f"[WiFi iwlist] Scan error: {e}")
-        return [{"ssid": "❌ No WiFi manager found", "signal": 0, "secure": False}]
+        print(f"[WiFi iwlist] Parse error: {e}")
+        return [{"ssid": "❌ Parse error", "signal": 0, "secure": False}]
