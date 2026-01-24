@@ -136,28 +136,72 @@ async def get_system_info():
 async def get_network_info():
     """Get network interface information including IP addresses"""
     try:
-        # Get all network interfaces using 'ip addr' command
-        result = subprocess.run(
-            ["ip", "-j", "addr", "show"],
-            capture_output=True,
-            text=True,
-            timeout=5
-        )
-        
-        if result.returncode != 0:
-            # Fallback to hostname -I
+    try:
+        # Try 'ip' command first
+        try:
+            result = subprocess.run(
+                ["ip", "-j", "addr", "show"],
+                capture_output=True,
+                text=True,
+                timeout=3
+            )
+            
+            if result.returncode == 0:
+                import json
+                interfaces_data = json.loads(result.stdout)
+                
+                interfaces = []
+                all_ips = []
+                
+                for iface in interfaces_data:
+                    if_name = iface.get("ifname", "unknown")
+                    # Skip loopback
+                    if if_name == "lo":
+                        continue
+                    
+                    addrs = iface.get("addr_info", [])
+                    ipv4_addrs = [addr["local"] for addr in addrs if addr.get("family") == "inet"]
+                    
+                    if ipv4_addrs:
+                        interfaces.append({
+                            "name": if_name,
+                            "ips": ipv4_addrs,
+                            "state": iface.get("operstate", "unknown")
+                        })
+                        all_ips.extend(ipv4_addrs)
+                
+                if all_ips:
+                    return {
+                        "interfaces": interfaces,
+                        "all_ips": all_ips,
+                        "primary_ip": all_ips[0]
+                    }
+        except (subprocess.SubprocessError, FileNotFoundError, PermissionError):
+            pass # Continue to fallback
+
+        # Fallback to hostname -I
+        try:
             fallback = subprocess.run(
                 ["hostname", "-I"],
                 capture_output=True,
                 text=True,
-                timeout=5
+                timeout=3
             )
-            ips = fallback.stdout.strip().split() if fallback.returncode == 0 else []
-            return {
-                "interfaces": [],
-                "all_ips": ips,
-                "primary_ip": ips[0] if ips else "Unknown"
-            }
+            ips = fallback.stdout.strip().split()
+            if ips:
+                return {
+                    "interfaces": [{"name": "primary", "ips": ips, "state": "UP"}],
+                    "all_ips": ips,
+                    "primary_ip": ips[0]
+                }
+        except Exception:
+            pass
+
+        return {
+            "interfaces": [],
+            "all_ips": [],
+            "primary_ip": "Không thể lấy IP"
+        }
         
         import json
         interfaces_data = json.loads(result.stdout)

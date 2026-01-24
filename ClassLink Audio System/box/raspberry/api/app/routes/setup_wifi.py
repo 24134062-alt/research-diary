@@ -112,8 +112,8 @@ async def scan_wifi():
             print("[WiFi] Scan timeout")
             return [{"ssid": "⚠️ Scan timeout", "signal": 0, "secure": False}]
         except FileNotFoundError:
-            print("[WiFi] nmcli not found - NetworkManager not installed")
-            return [{"ssid": "❌ NetworkManager not installed", "signal": 0, "secure": False}]
+            print("[WiFi] nmcli not found - NetworkManager not installed. Trying iwlist fallback...")
+            return await scan_wifi_iwlist()
         except Exception as e:
             print(f"[WiFi] Linux scan error: {e}")
             # Fallback mock for demo
@@ -497,3 +497,64 @@ async def disconnect_wifi():
             "message": f"Lỗi: {str(e)}"
         }
 
+async def scan_wifi_iwlist():
+    """Fallback scanning using iwlist"""
+    wifi_networks = []
+    try:
+        # Run iwlist scan
+        result = subprocess.check_output(
+            ["sudo", "iwlist", "wlan0", "scan"],
+            stderr=subprocess.STDOUT,
+            timeout=15
+        )
+        output = result.decode("utf-8", errors="ignore")
+        
+        seen_ssids = set()
+        current_network = {}
+        
+        for line in output.splitlines():
+            line = line.strip()
+            
+            # New cell starts
+            if "Cell" in line and "Address" in line:
+                if "ssid" in current_network and current_network["ssid"] not in seen_ssids:
+                    wifi_networks.append(current_network)
+                    seen_ssids.add(current_network["ssid"])
+                current_network = {"signal": 0, "secure": False}
+                
+            # Parse SSID
+            elif "ESSID:" in line:
+                ssid = line.split("ESSID:")[1].strip().strip('"')
+                if ssid: # Skip empty/hidden SSIDs for now
+                    current_network["ssid"] = ssid
+                    
+            # Parse Signal
+            elif "Signal level" in line:
+                # Format could be "Signal level=-60 dBm" or "Signal level=70/100"
+                if "dBm" in line:
+                    try:
+                        dbm = int(line.split("level=")[1].split("dBm")[0].strip())
+                        # Convert -100..-40 to 0..100%
+                        quality = max(0, min(100, 2 * (dbm + 100)))
+                        current_network["signal"] = quality
+                    except: pass
+                elif "/100" in line:
+                    try:
+                        current_network["signal"] = int(line.split("level=")[1].split("/100")[0].strip())
+                    except: pass
+            
+            # Parse Security
+            elif "Encryption key:on" in line:
+                current_network["secure"] = True
+                
+        # Add last network
+        if "ssid" in current_network and current_network["ssid"] not in seen_ssids:
+            wifi_networks.append(current_network)
+            
+        print(f"[WiFi iwlist] Parsed {len(wifi_networks)} networks")
+        wifi_networks.sort(key=lambda x: x["signal"], reverse=True)
+        return wifi_networks
+        
+    except Exception as e:
+        print(f"[WiFi iwlist] Scan error: {e}")
+        return [{"ssid": "❌ No WiFi manager found", "signal": 0, "secure": False}]
