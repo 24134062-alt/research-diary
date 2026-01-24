@@ -1,52 +1,51 @@
 @echo off
-chcp 65001 >nul
 echo.
-echo ╔══════════════════════════════════════════════════════════════════╗
-echo ║          ClassLink AI Service - Cài Đặt                          ║
-echo ╚══════════════════════════════════════════════════════════════════╝
+echo ==================================================================
+echo          ClassLink AI Service - Cai Dat
+echo ==================================================================
 echo.
 
 :: Check Python
 python --version >nul 2>&1
 if errorlevel 1 (
-    echo ❌ Chưa cài Python! Vui lòng cài Python 3.10+ từ python.org
+    echo [!] Chua cai Python! Vui long cai Python 3.10+ tu python.org
     pause
     exit /b 1
 )
 
-echo ✅ Tìm thấy Python
+echo [OK] Tim thay Python
 echo.
 
 :: Create venv
-echo [1/5] Tạo môi trường ảo...
+echo [1/5] Tao moi truong ao...
 if not exist "venv" (
     python -m venv venv
 )
 
 :: Activate venv
-echo [2/5] Kích hoạt môi trường ảo...
+echo [2/5] Kich hoat moi truong ao...
 call venv\Scripts\activate.bat
 
 :: Install deps
-echo [3/5] Cài đặt thư viện...
+echo [3/5] Cai dat thu vien...
 pip install -r requirements.txt --quiet
 
 :: Setup config
-echo [4/5] Cấu hình API Key...
+echo [4/5] Cau hinh API Key...
 if not exist "config.env" (
     copy .env.example config.env >nul
     echo.
-    echo ⚠️  Đã tạo file config.env
-    echo     Vui lòng mở file và thêm GEMINI_API_KEY của bạn!
+    echo [!] Da tao file config.env
+    echo     Vui long mo file va them GEMINI_API_KEY cua ban!
     echo.
-    echo     Lấy API Key miễn phí tại:
+    echo     Lay API Key mien phi tai:
     echo     https://aistudio.google.com/app/apikey
     echo.
     notepad config.env
 )
 
 :: Add to Windows Startup
-echo [5/5] Cài đặt tự động khởi động...
+echo [5/5] Cai dat tu dong khoi dong...
 set "STARTUP_FOLDER=%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup"
 set "CURRENT_DIR=%~dp0"
 
@@ -67,15 +66,15 @@ cscript //nologo "%TEMP%\CreateShortcut.vbs"
 del "%TEMP%\CreateShortcut.vbs"
 
 echo.
-echo ╔══════════════════════════════════════════════════════════════════╗
-echo ║  ✅ Cài đặt hoàn tất!                                            ║
-echo ║                                                                   ║
-echo ║  🚀 AI Service sẽ TỰ ĐỘNG CHẠY khi bật máy!                      ║
-echo ║                                                                   ║
-echo ║  📝 Tiếp theo:                                                   ║
-echo ║  1. Kiểm tra GEMINI_API_KEY trong config.env                    ║
-echo ║  2. Chạy start.bat lần đầu để test                              ║
-echo ║  3. Những lần sau chỉ cần mở web dashboard!                     ║
-echo ╚══════════════════════════════════════════════════════════════════╝
+echo ==================================================================
+echo   [OK] Cai dat hoan tat!
+echo
+echo   AI Service se TU DONG CHAY khi bat may!
+echo
+echo   Tiep theo:
+echo   1. Kiem tra GEMINI_API_KEY trong config.env
+echo   2. Chay start.bat lan dau de test
+echo   3. Nhung lan sau chi can mo web dashboard!
+echo ==================================================================
 echo.
 pause

@@ -1,14 +1,13 @@
 @echo off
-chcp 65001 >nul
 echo.
-echo ╔══════════════════════════════════════════════════════════════════╗
-echo ║          ClassLink AI Service - Khởi Động                        ║
-echo ╚══════════════════════════════════════════════════════════════════╝
+echo ==================================================================
+echo          ClassLink AI Service - Khoi Dong
+echo ==================================================================
 echo.
 
 :: Check venv
 if not exist "venv" (
-    echo ❌ Chưa cài đặt! Chạy install.bat trước.
+    echo [!] Chua cai dat! Chay install.bat truoc.
     pause
     exit /b 1
 )
@@ -18,8 +17,8 @@ call venv\Scripts\activate.bat
 
 :: Check config
 if not exist "config.env" (
-    echo ❌ Chưa có file config.env!
-    echo    Chạy install.bat để tạo file config.
+    echo [!] Chua co file config.env!
+    echo    Chay install.bat de tao file config.
     pause
     exit /b 1
 )
@@ -27,22 +26,22 @@ if not exist "config.env" (
 :: Check API key
 findstr /c:"paste_your_api_key_here" config.env >nul 2>&1
 if not errorlevel 1 (
-    echo ⚠️  Chưa cấu hình GEMINI_API_KEY trong config.env!
+    echo [!] Chua cau hinh GEMINI_API_KEY trong config.env!
     echo.
-    echo    Mở file config.env và thay "paste_your_api_key_here" bằng API key của bạn.
-    echo    Lấy API key miễn phí tại: https://aistudio.google.com/app/apikey
+    echo    Mo file config.env va thay "paste_your_api_key_here" bang API key cua ban.
+    echo    Lay API key mien phi tai: https://aistudio.google.com/app/apikey
     echo.
     pause
     exit /b 1
 )
 
-echo ✅ Kết nối MQTT broker tại Raspberry Pi...
+echo [OK] Ket noi MQTT broker tai Raspberry Pi...
 echo.
-echo 📡 Gửi audio đến port UDP 12346
-echo 🤖 Nhận lệnh từ MQTT
+echo [*] Gui audio den port UDP 12346
+echo [*] Nhan lenh tu MQTT
 echo.
-echo Nhấn Ctrl+C để dừng
-echo ─────────────────────────────────────────────────────────
+echo Nhan Ctrl+C de dung
+echo ----------------------------------------------------------
 echo.
 
 python main.py
