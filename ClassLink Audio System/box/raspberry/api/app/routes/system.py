@@ -218,7 +218,8 @@ async def download_pc_installer():
         
         # Fallback to relative path (development)
         if not ai_service_dir.exists():
-            base_dir = Path(__file__).resolve().parent.parent.parent.parent.parent
+            # Go up 6 levels: routes -> app -> api -> raspberry -> box -> ClassLink Audio System
+            base_dir = Path(__file__).resolve().parent.parent.parent.parent.parent.parent
             ai_service_dir = base_dir / "pc" / "ai_service"
         
         if not ai_service_dir.exists():
