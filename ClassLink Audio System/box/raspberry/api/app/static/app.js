@@ -493,7 +493,7 @@ function selectSession(sessionId) {
 }
 
 function renderChat(sessionId) {
-    const chatContainer = document.getElementById('chat-history');
+    const chatContainer = document.getElementById('teacher-chat-history');
     if (!chatContainer) return;
 
     // Safety check if session exists, else default to empty
@@ -565,7 +565,7 @@ function fillChat(prefix, content) {
 }
 
 function scrollToBottom() {
-    const container = document.getElementById('chat-history');
+    const container = document.getElementById('teacher-chat-history');
     if (container) container.scrollTop = container.scrollHeight;
 }
 
