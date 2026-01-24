@@ -282,6 +282,28 @@ function showView(viewId) {
     }
 }
 
+// Dashboard Tab Switching
+function switchDashTab(tabName) {
+    // Hide all tab contents
+    const tabContents = document.querySelectorAll('.dash-tab-content');
+    tabContents.forEach(content => content.classList.remove('active'));
+
+    // Show selected tab content
+    const selectedTab = document.getElementById(`tab-${tabName}`);
+    if (selectedTab) {
+        selectedTab.classList.add('active');
+    }
+
+    // Update tab button active state
+    const tabButtons = document.querySelectorAll('.dash-tab');
+    tabButtons.forEach(btn => btn.classList.remove('active'));
+    const activeButton = document.querySelector(`[onclick="switchDashTab('${tabName}')"]`);
+    if (activeButton) {
+        activeButton.classList.add('active');
+    }
+}
+
+
 // --- Network Information Functions ---
 async function fetchNetworkInfo() {
     try {
