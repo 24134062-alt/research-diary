@@ -1,0 +1,14 @@
+﻿// ====== Non-blocking Display State Machine ======
+enum DisplayState {
+  DISPLAY_IDLE,          // Không hiển thị gì
+  DISPLAY_SHOWING_CHAR,  // Đang hiển thị từng ký tự
+  DISPLAY_WAITING_END    // Đợi 3 giây trước khi quay về status
+};
+
+DisplayState displayState = DISPLAY_IDLE;
+unsigned long lastDisplayUpdate = 0;
+int currentCharIndex = 0;
+int currentWordIndex = 0;
+String currentMessageWords[100];
+int currentMessageWordCount = 0;
+

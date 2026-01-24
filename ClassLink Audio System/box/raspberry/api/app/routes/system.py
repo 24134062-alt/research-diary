@@ -136,7 +136,6 @@ async def get_system_info():
 async def get_network_info():
     """Get network interface information including IP addresses"""
     try:
-    try:
         # Try 'ip' command first
         try:
             result = subprocess.run(
@@ -202,36 +201,6 @@ async def get_network_info():
             "all_ips": [],
             "primary_ip": "Không thể lấy IP"
         }
-        
-        import json
-        interfaces_data = json.loads(result.stdout)
-        
-        interfaces = []
-        all_ips = []
-        
-        for iface in interfaces_data:
-            if_name = iface.get("ifname", "unknown")
-            # Skip loopback
-            if if_name == "lo":
-                continue
-            
-            addrs = iface.get("addr_info", [])
-            ipv4_addrs = [addr["local"] for addr in addrs if addr.get("family") == "inet"]
-            
-            if ipv4_addrs:
-                interfaces.append({
-                    "name": if_name,
-                    "ips": ipv4_addrs,
-                    "state": iface.get("operstate", "unknown")
-                })
-                all_ips.extend(ipv4_addrs)
-        
-        return {
-            "interfaces": interfaces,
-            "all_ips": all_ips,
-            "primary_ip": all_ips[0] if all_ips else "No IP assigned"
-        }
-        
     except Exception as e:
         return {
             "interfaces": [],
