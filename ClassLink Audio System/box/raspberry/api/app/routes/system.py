@@ -136,10 +136,10 @@ async def get_system_info():
 async def get_network_info():
     """Get network interface information including IP addresses"""
     try:
-        # Try 'ip' command first
+        # Try 'ip' command first (use absolute path for systemd)
         try:
             result = subprocess.run(
-                ["ip", "-j", "addr", "show"],
+                ["/usr/sbin/ip", "-j", "addr", "show"],
                 capture_output=True,
                 text=True,
                 timeout=3
@@ -178,10 +178,10 @@ async def get_network_info():
         except (subprocess.SubprocessError, FileNotFoundError, PermissionError):
             pass # Continue to fallback
 
-        # Fallback to hostname -I
+        # Fallback to hostname -I (use absolute path for systemd)
         try:
             fallback = subprocess.run(
-                ["hostname", "-I"],
+                ["/usr/bin/hostname", "-I"],
                 capture_output=True,
                 text=True,
                 timeout=3
