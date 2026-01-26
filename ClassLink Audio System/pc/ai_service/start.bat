@@ -1,5 +1,6 @@
 @echo off
 echo.
+title ClassLink AI Service
 echo ==================================================================
 echo          ClassLink AI Service - Khoi Dong
 echo ==================================================================

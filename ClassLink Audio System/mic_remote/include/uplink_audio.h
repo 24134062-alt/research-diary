@@ -9,5 +9,6 @@ private:
 
 public:
   void begin(const char *host, int port);
-  void sendAudioPacket(uint8_t *data, size_t len, bool aiMode = false);
+  void sendAudioPacket(uint8_t *data, size_t len, bool aiMode = false,
+                       bool classMode = true);
 };

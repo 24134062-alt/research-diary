@@ -17,7 +17,6 @@
 #include <PubSubClient.h>
 #include <WiFi.h>
 
-
 // ====== WiFi Config - Kết nối tới ESP32 Box ======
 const char *WIFI_SSID = "CLASS-BOX";
 const char *WIFI_PASS = "12345678";
@@ -71,6 +70,9 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
       isRecording = false;
       Serial.println("[MIC] Recording Stopped");
     }
+  } else if (String(topic) == "device/mic_remote/mode") {
+    currentMode = msg;
+    Serial.printf("[MIC] Mode updated to: %s\n", currentMode.c_str());
   }
 }
 
@@ -104,6 +106,12 @@ void reconnectMQTT() {
     Serial.print("[MQTT] Connecting...");
     if (mqtt.connect("MicRemote")) {
       Serial.println(" Connected!");
+
+      // Thông báo IP cho Gateway
+      String status = "{\"id\":\"mic_remote\",\"ip\":\"" +
+                      WiFi.localIP().toString() + "\"}";
+      mqtt.publish("glasses/status", status.c_str());
+
       mqtt.subscribe("audio/control");
       mqtt.subscribe("device/mic_remote/mode");
     } else {
@@ -199,7 +207,8 @@ void loop() {
   if (isRecording || aiModeActive) {
     size_t bytesRead = mic.read(audioBuffer, sizeof(audioBuffer));
     if (bytesRead > 0) {
-      uplink.sendAudioPacket(audioBuffer, bytesRead, aiModeActive);
+      uplink.sendAudioPacket(audioBuffer, bytesRead, aiModeActive,
+                             (currentMode == "class"));
     }
   }
 

@@ -2,7 +2,6 @@
 #include <WiFi.h>
 #include <WiFiUdp.h>
 
-
 WiFiUDP udp;
 
 void UplinkAudio::begin(const char *host, int port) {
@@ -13,18 +12,18 @@ void UplinkAudio::begin(const char *host, int port) {
   Serial.printf("Uplink Audio initialized targeting %s:%d\n", _host, _port);
 }
 
-void UplinkAudio::sendAudioPacket(uint8_t *data, size_t len, bool aiMode) {
+void UplinkAudio::sendAudioPacket(uint8_t *data, size_t len, bool aiMode,
+                                  bool classMode) {
   if (WiFi.status() == WL_CONNECTED) {
     udp.beginPacket(_host, _port);
 
-    // Byte 0: Flags (bit 0 = AI mode)
-    uint8_t flags = aiMode ? 0x01 : 0x00;
-    udp.write(&flags, 1);
+    // Header: 1 byte flags + 4 bytes sequence
+    // Flags: bit 0 = AI mode, bit 1 = class mode
+    uint8_t header[5];
+    header[0] = (aiMode ? 0x01 : 0x00) | (classMode ? 0x02 : 0x00);
+    memcpy(&header[1], &_sequence, 4);
 
-    // Bytes 1-4: Sequence Number (4 bytes)
-    udp.write((uint8_t *)&_sequence, sizeof(_sequence));
-
-    // Bytes 5+: Audio Data
+    udp.write(header, 5);
     udp.write(data, len);
 
     udp.endPacket();

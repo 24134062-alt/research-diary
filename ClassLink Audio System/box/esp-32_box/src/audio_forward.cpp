@@ -17,8 +17,8 @@
 #include <WiFiUdp.h>
 
 // ====== Cấu hình UDP ======
-static const char *PC_IP = "192.168.4.2"; // IP PC (sửa theo thực tế)
-static const uint16_t PC_PORT = 50005;
+static const char *PC_IP = "192.168.4.1"; // Raspberry Pi Gateway
+static const uint16_t PC_PORT = 12345;
 
 // ====== Audio fake config ======
 #define FRAME_SIZE 160 // số byte giả (nhẹ để test)
@@ -47,7 +47,7 @@ void audio_forward_loop() {
 
   if (now - last_send_ms >= SEND_INTERVAL_MS) {
     last_send_ms = now;
-    send_fake_audio();
+    // send_fake_audio(); // Disabled by default to save network bandwidth
   }
 }
 

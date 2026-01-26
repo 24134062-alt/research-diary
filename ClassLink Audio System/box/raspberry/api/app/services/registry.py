@@ -8,6 +8,8 @@ class DeviceInfo(BaseModel):
     status: str = "offline"
     last_seen: float = 0.0
     mode: str = "class"  # "class" or "private"
+    ai_active: bool = False
+    battery: Optional[int] = None
     ip: Optional[str] = None
 
 class DeviceRegistry:

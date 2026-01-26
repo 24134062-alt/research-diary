@@ -42,7 +42,8 @@ class MQTTService:
         client.subscribe("glasses/status")
         client.subscribe("glasses/text")
         client.subscribe("glasses/mode")
-        client.subscribe("ai/answer")
+        client.subscribe("glasses/ai")
+        client.subscribe("device/+/ai")
         client.subscribe("audio/control")
         
         # New: Chat & Monitoring
@@ -96,6 +97,7 @@ class MQTTService:
                     "glasses", 
                     status="online",
                     mode=mode,
+                    ip=data.get("ip"), # Capture IP for UDP Gateway
                     battery=data.get("battery")
                 )
                 
@@ -111,6 +113,14 @@ class MQTTService:
                     add_transcription(text, sender="ai")
                 except Exception as e:
                     print(f"Failed to add AI transcription: {e}")
+                
+                # BRIDGE: Forward teacher-triggered AI response to UART
+                if self.uart_service:
+                    self.uart_service.send({
+                        "type": "TEXT_DOWNLINK",
+                        "sender": "ai",
+                        "text": text
+                    })
                     
             elif topic == "glasses/text":
                 # This is the STT result from PC for the teacher/micro
@@ -130,6 +140,16 @@ class MQTTService:
                     add_transcription(text, sender="ai")
                 except Exception as e:
                     print(f"Failed to add AI transcription from glasses: {e}")
+                
+                # BRIDGE: Forward AI response to ESP32 Box via UART
+                # The ESP32 Box will then relay this to the Glasses via its own MQTT/UDP
+                if self.uart_service:
+                    self.uart_service.send({
+                        "type": "TEXT_DOWNLINK",
+                        "sender": "ai",
+                        "text": text
+                    })
+                    # print(f"[BRIDGE] AI Response -> UART: {text[:20]}...")
                     
             elif topic == "student/query/log":
                 # Log student query to their specific session
@@ -143,6 +163,22 @@ class MQTTService:
                     
                 self.add_chat_log(student_id, "student_log", f"Q: {question}\nA: {answer}")
             
+            elif topic == "glasses/mode":
+                # Handle mode changes (class/private)
+                device_id = data.get("id", "glass_default")
+                mode = payload_str.lower()
+                self.registry.register_or_update(device_id, "glasses", mode=mode)
+                print(f"[MODE-CHANGE] Device {device_id} -> {mode}")
+
+            elif topic.endswith("/ai"):
+                # Handle AI state changes from any device
+                device_id = topic.split('/')[1] if '/' in topic else "unknown"
+                if "glasses" in topic: device_id = data.get("id", device_id)
+                
+                active = payload_str.lower() in ["on", "start", "true"]
+                self.registry.register_or_update(device_id, "unknown", ai_active=active)
+                print(f"[AI-STATE] Device {device_id} AI: {active}")
+
             elif topic == "pc/status":
                 # PC AI Service heartbeat
                 import time

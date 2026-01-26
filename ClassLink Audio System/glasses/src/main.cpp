@@ -26,6 +26,9 @@
 const char *WIFI_SSID = "CLASS-BOX";
 const char *WIFI_PASS = "12345678";
 
+// ====== Device Identity ======
+const char *DEVICE_ID = "glasses_01"; // Mỗi kính nên có ID riêng
+
 // ====== MQTT Config - Raspberry Pi ======
 const char *MQTT_SERVER = "192.168.4.1";
 const int MQTT_PORT = 1883;
@@ -276,10 +279,24 @@ void reconnectMQTT() {
   int attempts = 0;
   while (!mqtt.connected() && attempts < 3) {
     Serial.print("[MQTT] Connecting...");
-    if (mqtt.connect("SmartGlasses")) {
+    if (mqtt.connect(DEVICE_ID)) {
       Serial.println(" Connected!");
-      mqtt.subscribe("glasses/text");  // Nhận text từ GV (khi AI off)
-      mqtt.subscribe("ai/answer");     // Nhận câu trả lời từ AI (khi AI on)
+
+      // Gửi status khi mới kết nối (bao gồm IP để Gateway nhận diện)
+      String statusMsg = "{";
+      statusMsg += "\"id\":\"" + String(DEVICE_ID) + "\",";
+      statusMsg += "\"ip\":\"" + WiFi.localIP().toString() + "\",";
+      statusMsg += "\"status\":\"online\"";
+      statusMsg += "}";
+      mqtt.publish("glasses/status", statusMsg.c_str());
+
+      mqtt.subscribe("glasses/text");   // Nhận broadcast từ GV
+      mqtt.subscribe("glasses/+/text"); // Nhận targeted (regexp logic sau)
+      String myTopic = "glasses/";
+      myTopic += DEVICE_ID;
+      myTopic += "/text";
+      mqtt.subscribe(myTopic.c_str()); // Nhận trực tiếp cho mình
+      mqtt.subscribe("ai/answer");     // Nhận câu trả lời từ AI
       mqtt.subscribe("audio/control"); // Nhận lệnh điều khiển
     } else {
       Serial.printf(" Failed (rc=%d)\n", mqtt.state());
@@ -299,7 +316,8 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
 
   // Nhận text từ GV - CHỈ khi AI mode TẮT
   // Khi AI mode BẬT, học sinh đang tập trung hỏi AI, không nhận text GV
-  if (String(topic) == "glasses/text" && !aiAssistantActive) {
+  if (String(topic).startsWith("glasses/") && String(topic).endsWith("/text") &&
+      !aiAssistantActive) {
     queuePush(msg); // Thêm vào hàng đợi
   }
 
@@ -606,11 +624,11 @@ void sendAudioPacket() {
 
   if (bytesRead > 0) {
     // Create packet with header
-    // Header: 4 bytes sequence + 1 byte flags
+    // Header: 1 byte flags + 4 bytes sequence
     // Flags: bit 0 = AI mode, bit 1 = class mode
     uint8_t packet[5 + BUFFER_LEN];
-    memcpy(packet, &packetSequence, 4);
-    packet[4] = (aiAssistantActive ? 0x01 : 0x00) | (classMode ? 0x02 : 0x00);
+    packet[0] = (aiAssistantActive ? 0x01 : 0x00) | (classMode ? 0x02 : 0x00);
+    memcpy(packet + 1, &packetSequence, 4);
     memcpy(packet + 5, audioBuffer, bytesRead);
 
     // Send UDP

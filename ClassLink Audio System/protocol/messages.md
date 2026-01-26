@@ -9,17 +9,18 @@
 Binary format cho audio streaming.
 
 ```
-┌──────────────────┬──────────────────────────────┐
-│  Sequence (4B)   │       Audio Data (512B)      │
-└──────────────────┴──────────────────────────────┘
+┌──────────┬──────────────┬──────────────────────────────┐
+│ Flag(1B) │ Sequence(4B) │       Audio Data (512B)      │
+└──────────┴──────────────┴──────────────────────────────┘
 ```
 
 | Field | Type | Size | Description |
 |-------|------|------|-------------|
+| flag | uint8_t | 1 byte | bit 0: AI, bit 1: Class Mode |
 | sequence | uint32_t | 4 bytes | Incremental counter (little-endian) |
 | audio_data | int16_t[] | 512 bytes | PCM 16-bit signed samples |
 
-**Total**: 516 bytes per packet
+**Total**: 517 bytes per packet
 
 ---
 

@@ -64,10 +64,12 @@ void handle_uart_line(const String &line) {
   if (line.indexOf("\"type\":\"MODE_SET\"") >= 0) {
     if (line.indexOf("\"mode\":\"CLASS\"") >= 0) {
       Serial.println("[UART] MODE -> CLASS");
-      // TODO: notify gateway / glasses
+      // Notify all glasses via MQTT broadcast
+      text_downlink_send(nullptr, "System: Switched to CLASS mode");
     } else if (line.indexOf("\"mode\":\"PRIVATE\"") >= 0) {
       Serial.println("[UART] MODE -> PRIVATE");
-      // TODO: notify gateway / glasses
+      // Notify all glasses via MQTT broadcast
+      text_downlink_send(nullptr, "System: Switched to PRIVATE mode");
     }
   }
 }

@@ -77,12 +77,8 @@ class AudioUDPServer:
             logger.warn("MQTT not connected, skipping publish")
             return
 
-        payload = json.dumps({
-            "text": text,
-            "duration": 5000,
-            "clear": False
-        })
-        self.mqtt_client.publish(TOPIC_TEXT, payload)
+        # Glasses protocol: raw string for direct display
+        self.mqtt_client.publish(TOPIC_TEXT, text)
         logger.info(f"Published to {TOPIC_TEXT}: {text}")
 
     def error_received(self, exc):

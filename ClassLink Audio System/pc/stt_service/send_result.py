@@ -21,7 +21,7 @@ except ImportError:
 # ====== Load Config ======
 CONFIG_PATH = Path(__file__).parent / "config.json"
 MOCK_MODE = False  # Set to False for production
-RASPBERRY_URL = "http://192.168.4.1:8002/api/stt"
+RASPBERRY_URL = "http://192.168.4.1:8000/api/stt"
 
 if CONFIG_PATH.exists():
     try:

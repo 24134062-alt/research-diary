@@ -8,7 +8,7 @@ Hệ thống bao gồm 3 thành phần chính hoạt động phối hợp qua gi
 
 1.  **Raspberry Pi (The Box - AI Core)**: 
     *   Trung tâm điều khiển.
-    *   Cung cấp Web Dashboard (Port 8002).
+    *   Cung cấp Web Dashboard (Port 8000).
     *   Lưu trữ lịch sử bài giảng và transcription.
     *   Cầu nối (Bridge) giữa phần cứng ESP32 và phần mềm AI trên PC.
 2.  **PC AI Service**:
@@ -32,12 +32,12 @@ graph TD
 
 ## 🚀 Hướng dẫn cài đặt nhanh
 
-### 1. Raspberry Pi (Cổng 8002)
+### 1. Raspberry Pi (Cổng 8000)
 ```bash
 cd "ClassLink Audio System/box/raspberry/api"
 pip install -r requirements.txt
 # Cấu hình tại app/config.yaml (Broker, Port, WiFi)
-python -m uvicorn app.main:app --host 0.0.0.0 --port 8002
+python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
 ### 2. PC AI Service

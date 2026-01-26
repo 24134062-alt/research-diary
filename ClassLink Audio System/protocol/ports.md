@@ -6,10 +6,10 @@ Danh sách các port được sử dụng trong hệ thống ClassLink.
 
 | Port | Protocol | Direction | Component | Description |
 |------|----------|-----------|-----------|-------------|
-| **12345** | UDP | Glasses → PC | STT Service | Audio streaming |
-| **1883** | TCP | All ↔ Broker | MQTT | Control & messaging |
+| **12345** | UDP | Glasses → RPi | Audio Tunnel | Encrypted PCM stream |
+| **12346** | UDP | RPi → AI | AI Tunnel | Processed requests |
 | **8000** | HTTP | Client → RPi | Web Dashboard | Teacher interface |
-| **8080** | HTTP | Internal | AI Service | AI API (optional) |
+| **1883** | MQTT | All | Control | Messaging & logic |
 
 ---
 

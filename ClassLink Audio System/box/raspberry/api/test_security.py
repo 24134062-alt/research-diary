@@ -1,7 +1,7 @@
 import requests
 import io
 
-API_URL = "http://localhost:8002/api/document/upload"
+API_URL = "http://localhost:8000/api/document/upload"
 
 def test_too_large():
     print("Testing file size limit (10MB)...")

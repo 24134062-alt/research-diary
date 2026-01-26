@@ -12,11 +12,6 @@ class AudioRouter:
     def route_audio_packet(self, packet: bytes, source_device_id: str) -> List[Tuple[str, int]]:
         """
         Routes audio packet based on AI flag and device mode.
-        
-        Packet format: [1 byte flags][4 bytes seq][N bytes audio]
-        
-        Returns:
-            List of (ip, port) tuples for destinations
         """
         if len(packet) < 5:
             return []
@@ -26,9 +21,18 @@ class AudioRouter:
         is_ai_request = (flags & 0x01) != 0
         
         if is_ai_request:
-            # AI request → route to AI service
-            print(f"[Router] AI request from {source_device_id} → AI Service")
-            return [(AI_SERVICE_IP, AI_SERVICE_PORT)]
+            # AI request → route to ALL online AI Services (dynamic IP)
+            targets = []
+            for did, device in self.registry.get_all_devices().items():
+                if device.type == "pc" and device.status == "online" and device.ip:
+                    targets.append((device.ip, AI_SERVICE_PORT))
+            
+            # Fallback for hardcoded setup if no PC registered yet
+            if not targets:
+                return [(AI_SERVICE_IP, AI_SERVICE_PORT)]
+                
+            print(f"[Router] AI request from {source_device_id} → {len(targets)} AI Services")
+            return targets
         
         #Normal audio routing
         source = self.registry.get_device(source_device_id)

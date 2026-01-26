@@ -44,6 +44,11 @@ class AITeachingAssistant:
                 logger.error(f"Failed to initialize Gemini client: {e}. Switching to DEMO mode.")
                 self.is_demo_mode = True
                 self.client = None
+        
+        # Initialize defaults
+        self.grade_level = "Trung hoc"
+        self.teacher_transcript = []
+        self.lecture_content = ""
     
     def load_lecture(self, content: str):
         """Load lecture content into AI context."""

@@ -9,6 +9,7 @@ from .services.mqtt import MQTTService
 from .services.uart import UARTService
 from .services.wifi_monitor import WiFiMonitor
 from .services.hotspot import HotspotController
+from .services.gateway import UDPGateway
 from .routes import health, setup_wifi, stt, wifi_manager, system, document
 
 app = FastAPI()
@@ -16,6 +17,9 @@ mqtt_service = MQTTService()
 uart_service = UARTService() # Default to /dev/ttyS0
 wifi_monitor = WiFiMonitor()
 hotspot_controller = HotspotController()
+
+# Initialize UDP Audio Gateway
+audio_gateway = UDPGateway(mqtt_service.registry, mqtt_service.router)
 
 # In-memory activity log
 activity_log = []
@@ -53,11 +57,11 @@ def bridge_uart_to_mqtt(data):
     """Callback for UART messages -> Publish to MQTT"""
     msg_type = data.get("type")
     if msg_type in ["DEV_JOIN", "DEV_LEAVE"]:
-        # Bridge to hardware status topic
+        # Bridge to hardware status topic (Update: standardize keys)
         mqtt_service.publish("hardware/event", data)
         print(f"[BRIDGE] UART -> MQTT: {data}")
         action = "đã gia nhập" if msg_type == "DEV_JOIN" else "đã rời mạng"
-        add_activity(f"Thiết bị {data.get('device_id')} {action}", "microchip")
+        add_activity(f"Thiết bị {data.get('device_id', 'unknown')} {action}", "microchip")
     elif msg_type == "AUDIO_DATA":
         # Specific bridging for high-speed audio data if needed
         pass
@@ -90,6 +94,9 @@ async def startup_event():
     
     # Start WiFi monitor in background
     asyncio.create_task(wifi_monitor.start_monitoring())
+
+    # Start UDP Audio Gateway
+    asyncio.create_task(audio_gateway.start())
 
 @app.get("/")
 async def read_root():

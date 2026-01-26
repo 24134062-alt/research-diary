@@ -137,7 +137,7 @@ python3 -m venv "$INSTALL_DIR/venv"
 log_info "Cài đặt Python packages..."
 "$INSTALL_DIR/venv/bin/pip" install --upgrade pip
 "$INSTALL_DIR/venv/bin/pip" install \
-    fastapi uvicorn pydantic pyyaml aiofiles
+    fastapi uvicorn pydantic pyyaml aiofiles paho-mqtt pyserial
 
 # Set ownership
 chown -R "$ACTUAL_USER:$ACTUAL_USER" "$INSTALL_DIR/venv"

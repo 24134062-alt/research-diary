@@ -44,10 +44,13 @@ async def receive_stt(data: STTText):
 
     # Add to global transcription history for dashboard
     try:
-        from ..main import add_transcription
+        from ..main import add_transcription, mqtt_service
         add_transcription(data.text, sender="teacher")
+        
+        # Publish to MQTT so devices can display it
+        mqtt_service.publish("glasses/text", {"text": data.text, "target": data.target})
     except Exception as e:
-        print(f"Failed to add STT transcription: {e}")
+        print(f"Failed to bridge STT: {e}")
 
     return {"status": "ok"}
 

@@ -33,11 +33,12 @@ while True:
         data, addr = sock.recvfrom(2048)
         packet_count += 1
         
-        # NEW Packet Format: [1 byte flags][4 bytes seq][N bytes audio]
-        if len(data) >= 5:
-            flags = data[0]
-            seq = struct.unpack('<I', data[1:5])[0]
-            audio_payload = data[5:]
+        # RPi Relay Format: [16 bytes Device ID][1 byte flags][4 bytes seq][N bytes audio]
+        if len(data) >= 21:
+            device_id = data[:16].rstrip(b'\x00').decode()
+            flags = data[16]
+            seq = struct.unpack('<I', data[17:21])[0]
+            audio_payload = data[21:]
             
             # Check AI flag
             is_ai = (flags & 0x01) != 0

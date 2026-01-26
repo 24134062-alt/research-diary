@@ -18,7 +18,15 @@ from dotenv import load_dotenv
 # Load environment variables from .env file
 load_dotenv()
 
-logging.basicConfig(level=logging.INFO)
+# Configure logging to both console and file
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler("ai_service.log", encoding='utf-8'),
+        logging.StreamHandler()
+    ]
+)
 logger = logging.getLogger(__name__)
 
 class AIService:
@@ -237,19 +245,21 @@ class AIService:
         """
         Process incoming audio packet.
         """
-        if len(data) < 5:
+        if len(data) < 21: # 16 (ID) + 5 (Header)
             return
         
-        flags = data[0]
+        # New RPi Relay Format: [16 bytes Device ID][1 byte flags][4 bytes seq][Audio...]
+        device_id_raw = data[:16].rstrip(b'\x00').decode()
+        flags = data[16]
         ai_mode = (flags & 0x01) != 0
         
         if not ai_mode:
-            return  # Not an AI request
+            return 
         
-        sequence = struct.unpack('<I', data[1:5])[0]
-        audio_data = data[5:]
+        sequence = struct.unpack('<I', data[17:21])[0]
+        audio_data = data[21:]
         
-        device_id = f"{addr[0]}:{addr[1]}"
+        device_id = device_id_raw
         
         # Buffer audio until we detect silence/end
         if device_id not in self.audio_buffers:

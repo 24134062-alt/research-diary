@@ -101,12 +101,20 @@ void text_downlink_handle(const String &jsonMessage) {
   // Extract target device (optional)
   int targetIdx = jsonMessage.indexOf("\"target\":\"");
   if (targetIdx >= 0) {
-    int startIdx = targetIdx + 10; // Length of "target":"
+    int startIdx = targetIdx + 10;
     int endIdx = jsonMessage.indexOf("\"", startIdx);
     if (endIdx > startIdx) {
       String deviceId = jsonMessage.substring(startIdx, endIdx);
-      target = "glasses/" + deviceId + "/text"; // Specific device topic
+      target = "glasses/" + deviceId + "/text";
     }
+  }
+
+  // AI Answer logic: If message contains "ai" in sender/type, use ai/answer
+  // topic This ensures Glasses correctly display it when aiAssistantActive is
+  // true
+  if (jsonMessage.indexOf("\"sender\":\"ai\"") >= 0 ||
+      jsonMessage.indexOf("\"type\":\"AI_ANSWER\"") >= 0) {
+    target = "ai/answer";
   }
 
   // Extract text content (required)
