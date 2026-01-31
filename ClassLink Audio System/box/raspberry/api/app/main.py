@@ -84,6 +84,11 @@ app.include_router(stt.router, prefix="/api", tags=["STT"])
 app.include_router(system.router, prefix="/api/system", tags=["System"])
 app.include_router(document.router, prefix="/api/document", tags=["Document"])
 
+# Mount static files directory for downloads
+static_dir = Path(__file__).parent / "static"
+if static_dir.exists():
+    app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+
 @app.on_event("startup")
 async def startup_event():
     # Start MQTT Client in background
