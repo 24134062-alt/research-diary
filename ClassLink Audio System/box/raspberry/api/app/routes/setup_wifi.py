@@ -272,6 +272,27 @@ async def connect_wifi(data: dict):
                 # Write success state
                 with open(state_file, "w") as f:
                     f.write(f"connected:{ssid}")
+                
+                # NEW: Broadcast WiFi config via MQTT for OTA updates
+                try:
+                    import json
+                    from ..services.mqtt import MQTTService
+                    
+                    mqtt = MQTTService.get_instance()
+                    if mqtt and mqtt.connected:
+                        config_payload = {
+                            "ssid": ssid,
+                            "password": password,
+                            "timestamp": time.time(),
+                            "source": "raspberry_pi"
+                        }
+                        mqtt.publish("classlink/config/wifi", json.dumps(config_payload))
+                        print(f"[WiFi] ✅ Config broadcasted via MQTT: {ssid}")
+                    else:
+                        print("[WiFi] ⚠️ MQTT not available, config not broadcasted")
+                except Exception as e:
+                    print(f"[WiFi] ⚠️ MQTT broadcast failed (non-critical): {e}")
+                
                 return
             else:
                 print(f"[WiFi] ❌ FAILED: {connect_result.stderr}")

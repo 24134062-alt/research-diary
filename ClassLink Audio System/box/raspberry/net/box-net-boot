@@ -65,33 +65,45 @@ SAVED_WIFI=$(nmcli -t -f NAME,TYPE connection show | grep ":802-11-wireless$" | 
 
 if [ -n "$SAVED_WIFI" ]; then
     log_info "Tìm thấy WiFi đã lưu: $SAVED_WIFI"
-    log_info "Đang thử kết nối..."
     
-    # Try to connect to the saved network
-    if nmcli --wait 30 connection up "$SAVED_WIFI" 2>/dev/null; then
-        sleep 3
+    # Try to connect with retry mechanism (improved reliability)
+    MAX_RETRIES=3
+    RETRY_COUNT=0
+    
+    while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+        log_info "Đang thử kết nối (lần $((RETRY_COUNT + 1))/$MAX_RETRIES)..."
         
-        # Verify connection
-        CONNECTED=$(nmcli -t -f ACTIVE,SSID device wifi | grep "^yes:" | cut -d: -f2)
-        
-        if [ -n "$CONNECTED" ]; then
-            IP_ADDR=$(ip -4 addr show wlan0 | grep -oP '(?<=inet\s)\d+\.\d+\.\d+\.\d+' | head -1)
-            log_info "✅ Kết nối WiFi thành công!"
-            log_info "   SSID: $CONNECTED"
-            log_info "   IP: ${IP_ADDR:-N/A}"
+        if nmcli --wait 20 connection up "$SAVED_WIFI" 2>/dev/null; then
+            sleep 3
             
-            # Test internet
-            if ping -c 1 -W 5 8.8.8.8 &>/dev/null; then
-                log_info "🌐 Internet: OK"
-            else
-                log_warn "⚠️ Kết nối WiFi nhưng không có Internet"
+            # Verify connection
+            CONNECTED=$(nmcli -t -f ACTIVE,SSID device wifi | grep "^yes:" | cut -d: -f2)
+            
+            if [ -n "$CONNECTED" ]; then
+                IP_ADDR=$(ip -4 addr show wlan0 | grep -oP '(?<=inet\s)\d+\.\d+\.\d+\.\d+' | head -1)
+                log_info "✅ Kết nối WiFi thành công!"
+                log_info "   SSID: $CONNECTED"
+                log_info "   IP: ${IP_ADDR:-N/A}"
+                
+                # Test internet
+                if ping -c 1 -W 5 8.8.8.8 &>/dev/null; then
+                    log_info "🌐 Internet: OK"
+                else
+                    log_warn "⚠️ Kết nối WiFi nhưng không có Internet"
+                fi
+                
+                exit 0
             fi
-            
-            exit 0
         fi
-    fi
+        
+        RETRY_COUNT=$((RETRY_COUNT + 1))
+        if [ $RETRY_COUNT -lt $MAX_RETRIES ]; then
+            log_warn "Thất bại lần $RETRY_COUNT, chờ 5s và thử lại..."
+            sleep 5
+        fi
+    done
     
-    log_warn "Không thể kết nối đến $SAVED_WIFI"
+    log_warn "Không thể kết nối đến $SAVED_WIFI sau $MAX_RETRIES lần thử"
 fi
 
 # No saved WiFi or connection failed → Start AP mode
