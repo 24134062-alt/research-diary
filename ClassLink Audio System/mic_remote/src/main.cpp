@@ -11,15 +11,19 @@
  * Kết nối WiFi tới ESP32 Box (CLASS-BOX)
  *************************************************/
 
+#include "../include/wifi_config.h"
 #include "i2s_mic.h"
 #include "uplink_audio.h"
 #include <Arduino.h>
+#include <ArduinoJson.h>
+#include <Preferences.h>
 #include <PubSubClient.h>
 #include <WiFi.h>
 
-// ====== WiFi Config - Kết nối tới ESP32 Box ======
-const char *WIFI_SSID = "CLASS-BOX";
-const char *WIFI_PASS = "12345678";
+
+// ====== WiFi Multi-Network Support ======
+WiFiNetwork wifi_list[MAX_WIFI_NETWORKS];
+Preferences wifi_prefs;
 
 // ====== MQTT Config - Raspberry Pi ======
 const char *MQTT_SERVER = "192.168.4.1";
@@ -74,28 +78,177 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
     currentMode = msg;
     Serial.printf("[MIC] Mode updated to: %s\n", currentMode.c_str());
   }
+
+  // ====== NEW: WiFi OTA Update ======
+  else if (String(topic) == "classlink/config/wifi") {
+    Serial.println("[MQTT] 📡 WiFi OTA config update received!");
+
+    // Parse JSON
+    StaticJsonDocument<256> doc;
+    DeserializationError error = deserializeJson(doc, msg);
+
+    if (error) {
+      Serial.printf("[MQTT][ERROR] JSON parse failed: %s\n", error.c_str());
+      return;
+    }
+
+    const char *new_ssid = doc["ssid"];
+    const char *new_password = doc["password"];
+
+    if (new_ssid == nullptr || new_password == nullptr) {
+      Serial.println("[MQTT][ERROR] Missing ssid or password");
+      return;
+    }
+
+    // Handle OTA update
+    wifi_ota_update(new_ssid, new_password);
+  }
+}
+
+// ====== WiFi Functions ======
+void wifi_load_list() {
+  wifi_prefs.begin(WIFI_PREFS_NAMESPACE, false);
+
+  strcpy(wifi_list[0].ssid, DEFAULT_WIFI_SSID);
+  strcpy(wifi_list[0].password, DEFAULT_WIFI_PASS);
+  wifi_list[0].priority = 0;
+
+  for (int i = 1; i < MAX_WIFI_NETWORKS; i++) {
+    String key_ssid = "ssid_" + String(i);
+    String key_pass = "pass_" + String(i);
+
+    String ssid = wifi_prefs.getString(key_ssid.c_str(), "");
+    String pass = wifi_prefs.getString(key_pass.c_str(), "");
+
+    if (ssid.length() > 0) {
+      strcpy(wifi_list[i].ssid, ssid.c_str());
+      strcpy(wifi_list[i].password, pass.c_str());
+      wifi_list[i].priority = i;
+    } else {
+      wifi_list[i].ssid[0] = '\0';
+      wifi_list[i].priority = 255;
+    }
+  }
+
+  wifi_prefs.end();
+}
+
+void wifi_save_list() {
+  wifi_prefs.begin(WIFI_PREFS_NAMESPACE, false);
+
+  for (int i = 1; i < MAX_WIFI_NETWORKS; i++) {
+    String key_ssid = "ssid_" + String(i);
+    String key_pass = "pass_" + String(i);
+
+    if (wifi_list[i].ssid[0] != '\0') {
+      wifi_prefs.putString(key_ssid.c_str(), wifi_list[i].ssid);
+      wifi_prefs.putString(key_pass.c_str(), wifi_list[i].password);
+    } else {
+      wifi_prefs.remove(key_ssid.c_str());
+      wifi_prefs.remove(key_pass.c_str());
+    }
+  }
+
+  wifi_prefs.end();
+}
+
+bool wifi_connect() {
+  for (int i = 0; i < MAX_WIFI_NETWORKS; i++) {
+    if (wifi_list[i].ssid[0] == '\0')
+      continue;
+
+    Serial.printf("[WiFi] Trying priority %d: %s", i, wifi_list[i].ssid);
+
+    int n = WiFi.scanNetworks();
+    bool found = false;
+
+    for (int j = 0; j < n; j++) {
+      if (WiFi.SSID(j) == String(wifi_list[i].ssid)) {
+        found = true;
+        break;
+      }
+    }
+
+    if (!found) {
+      Serial.println(" - Not available");
+      continue;
+    }
+
+    WiFi.begin(wifi_list[i].ssid, wifi_list[i].password);
+
+    int attempts = 0;
+    while (WiFi.status() != WL_CONNECTED && attempts < 20) {
+      delay(500);
+      Serial.print(".");
+      digitalWrite(LED_STATUS_PIN, !digitalRead(LED_STATUS_PIN));
+      attempts++;
+    }
+
+    if (WiFi.status() == WL_CONNECTED) {
+      Serial.printf("\n[WiFi] ✅ Connected to %s\n", wifi_list[i].ssid);
+      digitalWrite(LED_STATUS_PIN, HIGH);
+      return true;
+    } else {
+      Serial.println(" - Failed");
+      WiFi.disconnect();
+    }
+  }
+
+  Serial.println("[WiFi] ❌ No available networks");
+  return false;
+}
+
+void wifi_add_network(const char *ssid, const char *password,
+                      uint8_t priority) {
+  if (priority == 0 || priority >= MAX_WIFI_NETWORKS)
+    return;
+
+  for (int i = 0; i < MAX_WIFI_NETWORKS; i++) {
+    if (strcmp(wifi_list[i].ssid, ssid) == 0) {
+      strcpy(wifi_list[i].password, password);
+      wifi_list[i].priority = priority;
+      wifi_save_list();
+      return;
+    }
+  }
+
+  strcpy(wifi_list[priority].ssid, ssid);
+  strcpy(wifi_list[priority].password, password);
+  wifi_list[priority].priority = priority;
+  wifi_save_list();
+}
+
+void wifi_ota_update(const char *new_ssid, const char *new_password) {
+  Serial.println("[WiFi] OTA Config Update Received");
+  Serial.printf("[WiFi]   New SSID: %s\n", new_ssid);
+
+  wifi_add_network(new_ssid, new_password, 1);
+
+  Serial.println("[WiFi] ⏰ Waiting 3 seconds for ESP32 Box...");
+  for (int i = 3; i > 0; i--) {
+    Serial.printf("[WiFi]    Reconnecting in %d seconds...\n", i);
+    delay(1000);
+  }
+
+  WiFi.disconnect();
+  delay(500);
+
+  if (wifi_connect()) {
+    Serial.println("[WiFi] ✅ Reconnected successfully!");
+  } else {
+    Serial.println("[WiFi] ❌ Reconnect failed");
+  }
 }
 
 // ====== WiFi Connect ======
 void connectWiFi() {
-  Serial.printf("[WiFi] Connecting to %s", WIFI_SSID);
-  WiFi.begin(WIFI_SSID, WIFI_PASS);
+  Serial.println("[WiFi] Initializing multi-network support...");
+  wifi_load_list();
 
-  int attempts = 0;
-  while (WiFi.status() != WL_CONNECTED && attempts < 30) {
-    delay(500);
-    Serial.print(".");
-    // Blink LED while connecting
-    digitalWrite(LED_STATUS_PIN, !digitalRead(LED_STATUS_PIN));
-    attempts++;
-  }
-
-  if (WiFi.status() == WL_CONNECTED) {
-    Serial.println(" Connected!");
+  if (wifi_connect()) {
     Serial.printf("[WiFi] IP: %s\n", WiFi.localIP().toString().c_str());
-    digitalWrite(LED_STATUS_PIN, HIGH); // LED on when connected
   } else {
-    Serial.println(" Failed!");
+    Serial.println("[WiFi] Failed to connect!");
     digitalWrite(LED_STATUS_PIN, LOW);
   }
 }
@@ -114,6 +267,8 @@ void reconnectMQTT() {
 
       mqtt.subscribe("audio/control");
       mqtt.subscribe("device/mic_remote/mode");
+      mqtt.subscribe("classlink/config/wifi"); // ← NEW: WiFi OTA
+      Serial.println("[MQTT] ✅ Subscribed to classlink/config/wifi");
     } else {
       Serial.printf(" Failed (rc=%d), retry in 5s\n", mqtt.state());
       delay(5000);

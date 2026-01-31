@@ -273,25 +273,40 @@ async def connect_wifi(data: dict):
                 with open(state_file, "w") as f:
                     f.write(f"connected:{ssid}")
                 
+                
                 # NEW: Broadcast WiFi config via MQTT for OTA updates
                 try:
                     import json
-                    from ..services.mqtt import MQTTService
+                    from ..main import mqtt_service
                     
-                    mqtt = MQTTService.get_instance()
-                    if mqtt and mqtt.connected:
+                    if mqtt_service and mqtt_service.client:
                         config_payload = {
                             "ssid": ssid,
                             "password": password,
                             "timestamp": time.time(),
                             "source": "raspberry_pi"
                         }
-                        mqtt.publish("classlink/config/wifi", json.dumps(config_payload))
-                        print(f"[WiFi] ✅ Config broadcasted via MQTT: {ssid}")
+                        
+                        print(f"[WiFi] 📡 Broadcasting WiFi config via MQTT...")
+                        print(f"[WiFi]   Topic: classlink/config/wifi")
+                        print(f"[WiFi]   SSID: {ssid}")
+                        print(f"[WiFi]   Payload: {json.dumps(config_payload, indent=2)}")
+                        
+                        mqtt_service.publish("classlink/config/wifi", config_payload)
+                        print(f"[WiFi] ✅ Config broadcasted successfully")
+                        
+                        # Log to activity
+                        try:
+                            from ..main import add_activity
+                            add_activity(f"WiFi config broadcasted: {ssid}", "wifi")
+                        except:
+                            pass
                     else:
-                        print("[WiFi] ⚠️ MQTT not available, config not broadcasted")
+                        print("[WiFi] ⚠️ MQTT service not available, skipping broadcast")
                 except Exception as e:
                     print(f"[WiFi] ⚠️ MQTT broadcast failed (non-critical): {e}")
+                    import traceback
+                    traceback.print_exc()
                 
                 return
             else:

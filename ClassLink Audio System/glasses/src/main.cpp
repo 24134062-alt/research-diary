@@ -1,33 +1,34 @@
 /*************************************************
  * ClassLink Audio System - Smart Glasses
  *
+ * MODIFIED: Single Button Control (GPIO 32)
+ * Mode Cycle: Class → Private → AI Assistant → Class ...
+ *
  * Phần cứng:
  * - ESP32
  * - INMP441 I2S Microphone
  * - OLED Display (SSD1306)
- * - Nút 1 (GPIO 32): Toggle Class ↔ Private
- * - Nút 2 (GPIO 33): Toggle AI Trợ Giảng
+ * - Nút (GPIO 32): Cycle qua 3 chế độ
  *
  * Kết nối WiFi tới ESP32 Box (CLASS-BOX)
- *
- * UPDATED: Fixed display blocking issues (non-blocking display)
  *************************************************/
 
+#include "../include/wifi_config.h"
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
 #include <Arduino.h>
+#include <ArduinoJson.h>
+#include <Preferences.h>
 #include <PubSubClient.h>
 #include <WiFi.h>
 #include <WiFiUdp.h>
 #include <Wire.h>
 #include <driver/i2s.h>
 
-// ====== WiFi Config - Kết nối tới ESP32 Box ======
-const char *WIFI_SSID = "CLASS-BOX";
-const char *WIFI_PASS = "12345678";
 
-// ====== Device Identity ======
-const char *DEVICE_ID = "glasses_01"; // Mỗi kính nên có ID riêng
+// ====== WiFi Multi-Network Support ======
+WiFiNetwork wifi_list[MAX_WIFI_NETWORKS];
+Preferences wifi_prefs;
 
 // ====== MQTT Config - Raspberry Pi ======
 const char *MQTT_SERVER = "192.168.4.1";
@@ -39,15 +40,14 @@ const int AUDIO_PORT = 12345;
 
 // ====== I2S Microphone Pins ======
 #define I2S_WS 25
-#define I2S_SD 34 // Đổi từ 33 sang 34 để tránh xung đột với nút
+#define I2S_SD 34
 #define I2S_SCK 26
 #define I2S_PORT I2S_NUM_0
 #define SAMPLE_RATE 16000
 #define BUFFER_LEN 512
 
-// ====== Button Pins (Nhấn-thả) ======
-#define BTN_MODE_PIN 32 // Nút 1: Toggle Class ↔ Private
-#define BTN_AI_PIN 33   // Nút 2: Toggle AI Trợ Giảng
+// ====== Single Button Pin ======
+#define BTN_PIN 32 // Nút duy nhất: Cycle qua Class → Private → AI
 
 // ====== OLED Config ======
 #define SCREEN_WIDTH 128
@@ -64,32 +64,23 @@ PubSubClient mqtt(espClient);
 WiFiUDP udp;
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
-// ====== State ======
-bool classMode = true;          // true = Class, false = Private
-bool aiAssistantActive = false; // AI trợ giảng bật/tắt
-bool isRecording = true;        // Đang ghi âm
+// ====== Mode State Machine ======
+enum OperatingMode {
+  MODE_CLASS = 0,       // Chế độ lớp học - Nhận text từ GV
+  MODE_PRIVATE = 1,     // Chế độ riêng tư - Im lặng
+  MODE_AI_ASSISTANT = 2 // Chế độ AI - Hỏi đáp AI
+};
+
+OperatingMode currentMode = MODE_CLASS; // Mặc định: Class mode
+bool isRecording = true;                // Đang ghi âm
 uint32_t packetSequence = 0;
 
 // ====== Message Queue for Text Display ======
-#define MESSAGE_QUEUE_SIZE 20 // Tăng từ 10 lên 20 để tránh mất message
+#define MESSAGE_QUEUE_SIZE 20
 String messageQueue[MESSAGE_QUEUE_SIZE];
-int queueHead = 0;             // Vị trí đọc
-int queueTail = 0;             // Vị trí ghi
-bool isDisplayingText = false; // Đang hiển thị text?
-
-// ====== Non-blocking Display State Machine ======
-enum DisplayState {
-  DISPLAY_IDLE,         // Không hiển thị gì
-  DISPLAY_SHOWING_CHAR, // Đang hiển thị từng ký tự
-  DISPLAY_WAITING_END   // Đợi 3 giây trước khi quay về status
-};
-
-DisplayState displayState = DISPLAY_IDLE;
-unsigned long lastDisplayUpdate = 0;
-int currentCharIndex = 0;
-int currentWordIndex = 0;
-String currentMessageWords[100];
-int currentMessageWordCount = 0;
+int queueHead = 0;
+int queueTail = 0;
+bool isDisplayingText = false;
 
 // Queue functions
 bool queueIsEmpty() { return queueHead == queueTail; }
@@ -119,8 +110,7 @@ String queuePop() {
 }
 
 // ====== Button Debouncing ======
-unsigned long lastBtnModePress = 0;
-unsigned long lastBtnAIPress = 0;
+unsigned long lastBtnPress = 0;
 const unsigned long DEBOUNCE_DELAY = 300;
 
 // ====== Audio Buffer ======
@@ -133,30 +123,19 @@ void setupI2S();
 void setupOLED();
 void mqttCallback(char *topic, byte *payload, unsigned int length);
 void reconnectMQTT();
-void handleButtons();
+void handleButton();
 void sendAudioPacket();
 void updateDisplay();
-void startDisplayText(const char *text);
-void updateDisplayText();
+void displayText(const char *text);
 void processMessageQueue();
+const char *getModeString(OperatingMode mode);
 
-// ====== UTF-8 Helper Functions ======
-// Đếm số ký tự UTF-8 thực tế (không phải bytes)
-int utf8CharCount(const String &str) {
-  int count = 0;
-  for (int i = 0; i < str.length(); i++) {
-    // Byte đầu của ký tự UTF-8 không có pattern 10xxxxxx
-    if ((str[i] & 0xC0) != 0x80)
-      count++;
-  }
-  return count;
-}
-
-// Ước lượng display width (pixels) cho string UTF-8
-int getDisplayWidth(const String &str, int textSize) {
-  // Mỗi ký tự UTF-8 ~ 6 pixels với font mặc định
-  return utf8CharCount(str) * 6 * textSize;
-}
+// WiFi management functions
+void wifi_load_list();
+void wifi_save_list();
+bool wifi_connect();
+void wifi_add_network(const char *ssid, const char *password, uint8_t priority);
+void wifi_ota_update(const char *new_ssid, const char *new_password);
 
 // ====== Setup ======
 void setup() {
@@ -165,12 +144,11 @@ void setup() {
 
   Serial.println();
   Serial.println("=========================================");
-  Serial.println("   ClassLink - Smart Glasses Controller  ");
+  Serial.println("   ClassLink - Smart Glasses (1 Button)  ");
   Serial.println("=========================================");
 
   // GPIO Setup
-  pinMode(BTN_MODE_PIN, INPUT_PULLUP);
-  pinMode(BTN_AI_PIN, INPUT_PULLUP);
+  pinMode(BTN_PIN, INPUT_PULLUP);
   pinMode(LED_STATUS_PIN, OUTPUT);
 
   // OLED Setup
@@ -197,6 +175,7 @@ void setup() {
 
   Serial.println("-----------------------------------------");
   Serial.println("[READY] Glasses is running!");
+  Serial.printf("[MODE] Current: %s\n", getModeString(currentMode));
   Serial.println("-----------------------------------------");
 }
 
@@ -213,24 +192,35 @@ void loop() {
   }
   mqtt.loop();
 
-  // Handle button presses
-  handleButtons();
-
-  // Update non-blocking display
-  updateDisplayText();
+  // Handle button press
+  handleButton();
 
   // Process message queue (non-blocking)
   processMessageQueue();
 
   // Audio recording & sending
-  if (isRecording) {
+  if (isRecording && currentMode != MODE_PRIVATE) {
     sendAudioPacket();
   }
 
   delay(10);
 }
 
-// ====== WiFi Setup ======
+// ====== Get Mode String ======
+const char *getModeString(OperatingMode mode) {
+  switch (mode) {
+  case MODE_CLASS:
+    return "CLASS";
+  case MODE_PRIVATE:
+    return "PRIVATE";
+  case MODE_AI_ASSISTANT:
+    return "AI ASSISTANT";
+  default:
+    return "UNKNOWN";
+  }
+}
+
+// ====== WiFi Setup with Multi-Network Support ======
 void setupWiFi() {
   display.clearDisplay();
   display.setTextSize(1);
@@ -238,18 +228,13 @@ void setupWiFi() {
   display.println("Connecting WiFi...");
   display.display();
 
-  Serial.printf("[WiFi] Connecting to %s", WIFI_SSID);
-  WiFi.begin(WIFI_SSID, WIFI_PASS);
+  Serial.println("[WiFi] Initializing multi-network support...");
 
-  int attempts = 0;
-  while (WiFi.status() != WL_CONNECTED && attempts < 30) {
-    delay(500);
-    Serial.print(".");
-    digitalWrite(LED_STATUS_PIN, !digitalRead(LED_STATUS_PIN));
-    attempts++;
-  }
+  // Load WiFi list from Preferences
+  wifi_load_list();
 
-  if (WiFi.status() == WL_CONNECTED) {
+  // Try to connect using priority list
+  if (wifi_connect()) {
     Serial.println(" Connected!");
     Serial.printf("[WiFi] IP: %s\n", WiFi.localIP().toString().c_str());
     digitalWrite(LED_STATUS_PIN, HIGH);
@@ -268,6 +253,167 @@ void setupWiFi() {
   delay(1000);
 }
 
+// ====== WiFi Load List ======
+void wifi_load_list() {
+  wifi_prefs.begin(WIFI_PREFS_NAMESPACE, false);
+
+  // Priority 0: Always set CLASS-BOX as default
+  strcpy(wifi_list[0].ssid, DEFAULT_WIFI_SSID);
+  strcpy(wifi_list[0].password, DEFAULT_WIFI_PASS);
+  wifi_list[0].priority = 0;
+
+  // Load other networks from Preferences
+  for (int i = 1; i < MAX_WIFI_NETWORKS; i++) {
+    String key_ssid = "ssid_" + String(i);
+    String key_pass = "pass_" + String(i);
+
+    String ssid = wifi_prefs.getString(key_ssid.c_str(), "");
+    String pass = wifi_prefs.getString(key_pass.c_str(), "");
+
+    if (ssid.length() > 0) {
+      strcpy(wifi_list[i].ssid, ssid.c_str());
+      strcpy(wifi_list[i].password, pass.c_str());
+      wifi_list[i].priority = i;
+      Serial.printf("[WiFi] Loaded network %d: %s\n", i, ssid.c_str());
+    } else {
+      wifi_list[i].ssid[0] = '\0';
+      wifi_list[i].priority = 255;
+    }
+  }
+
+  wifi_prefs.end();
+}
+
+// ====== WiFi Save List ======
+void wifi_save_list() {
+  wifi_prefs.begin(WIFI_PREFS_NAMESPACE, false);
+
+  // Skip index 0 (CLASS-BOX default)
+  for (int i = 1; i < MAX_WIFI_NETWORKS; i++) {
+    String key_ssid = "ssid_" + String(i);
+    String key_pass = "pass_" + String(i);
+
+    if (wifi_list[i].ssid[0] != '\0') {
+      wifi_prefs.putString(key_ssid.c_str(), wifi_list[i].ssid);
+      wifi_prefs.putString(key_pass.c_str(), wifi_list[i].password);
+    } else {
+      wifi_prefs.remove(key_ssid.c_str());
+      wifi_prefs.remove(key_pass.c_str());
+    }
+  }
+
+  wifi_prefs.end();
+  Serial.println("[WiFi] List saved to Preferences");
+}
+
+// ====== WiFi Connect with Priority ======
+bool wifi_connect() {
+  // Try each network by priority
+  for (int i = 0; i < MAX_WIFI_NETWORKS; i++) {
+    if (wifi_list[i].ssid[0] == '\0')
+      continue;
+
+    Serial.printf("[WiFi] Trying priority %d: %s", i, wifi_list[i].ssid);
+
+    // Scan for available networks
+    int n = WiFi.scanNetworks();
+    bool found = false;
+
+    for (int j = 0; j < n; j++) {
+      if (WiFi.SSID(j) == String(wifi_list[i].ssid)) {
+        found = true;
+        break;
+      }
+    }
+
+    if (!found) {
+      Serial.println(" - Not available");
+      continue;
+    }
+
+    // Try to connect
+    WiFi.begin(wifi_list[i].ssid, wifi_list[i].password);
+
+    int attempts = 0;
+    while (WiFi.status() != WL_CONNECTED && attempts < 20) {
+      delay(500);
+      Serial.print(".");
+      digitalWrite(LED_STATUS_PIN, !digitalRead(LED_STATUS_PIN));
+      attempts++;
+    }
+
+    if (WiFi.status() == WL_CONNECTED) {
+      Serial.printf("\n[WiFi] ✅ Connected to %s\n", wifi_list[i].ssid);
+      digitalWrite(LED_STATUS_PIN, HIGH);
+      return true;
+    } else {
+      Serial.println(" - Failed");
+      WiFi.disconnect();
+    }
+  }
+
+  Serial.println("[WiFi] ❌ No available networks");
+  return false;
+}
+
+// ====== WiFi Add Network ======
+void wifi_add_network(const char *ssid, const char *password,
+                      uint8_t priority) {
+  if (priority == 0 || priority >= MAX_WIFI_NETWORKS) {
+    Serial.println("[WiFi] Invalid priority (0 is reserved, max is 4)");
+    return;
+  }
+
+  // Check if already exists
+  for (int i = 0; i < MAX_WIFI_NETWORKS; i++) {
+    if (strcmp(wifi_list[i].ssid, ssid) == 0) {
+      // Update password
+      strcpy(wifi_list[i].password, password);
+      wifi_list[i].priority = priority;
+      wifi_save_list();
+      Serial.printf("[WiFi] Updated network: %s\n", ssid);
+      return;
+    }
+  }
+
+  // Add new
+  strcpy(wifi_list[priority].ssid, ssid);
+  strcpy(wifi_list[priority].password, password);
+  wifi_list[priority].priority = priority;
+  wifi_save_list();
+  Serial.printf("[WiFi] Added network: %s (priority %d)\n", ssid, priority);
+}
+
+// ====== WiFi OTA Update ======
+void wifi_ota_update(const char *new_ssid, const char *new_password) {
+  Serial.println("[WiFi] ========================================");
+  Serial.println("[WiFi] OTA Config Update Received");
+  Serial.printf("[WiFi]   New SSID: %s\n", new_ssid);
+  Serial.println("[WiFi] ========================================");
+
+  // Add to list (priority 1, right after CLASS-BOX)
+  wifi_add_network(new_ssid, new_password, 1);
+
+  // Wait for ESP32 Box to restart
+  Serial.println("[WiFi] ⏰ Waiting 3 seconds for ESP32 Box to restart...");
+  for (int i = 3; i > 0; i--) {
+    Serial.printf("[WiFi]    Reconnecting in %d seconds...\n", i);
+    delay(1000);
+  }
+
+  // Disconnect and reconnect
+  Serial.println("[WiFi] Reconnecting...");
+  WiFi.disconnect();
+  delay(500);
+
+  if (wifi_connect()) {
+    Serial.println("[WiFi] ✅ Reconnected successfully!");
+    updateDisplay();
+  } else {
+    Serial.println("[WiFi] ❌ Reconnect failed");
+  }
+}
+
 // ====== MQTT Setup ======
 void setupMQTT() {
   mqtt.setServer(MQTT_SERVER, MQTT_PORT);
@@ -279,25 +425,13 @@ void reconnectMQTT() {
   int attempts = 0;
   while (!mqtt.connected() && attempts < 3) {
     Serial.print("[MQTT] Connecting...");
-    if (mqtt.connect(DEVICE_ID)) {
+    if (mqtt.connect("SmartGlasses")) {
       Serial.println(" Connected!");
-
-      // Gửi status khi mới kết nối (bao gồm IP để Gateway nhận diện)
-      String statusMsg = "{";
-      statusMsg += "\"id\":\"" + String(DEVICE_ID) + "\",";
-      statusMsg += "\"ip\":\"" + WiFi.localIP().toString() + "\",";
-      statusMsg += "\"status\":\"online\"";
-      statusMsg += "}";
-      mqtt.publish("glasses/status", statusMsg.c_str());
-
-      mqtt.subscribe("glasses/text");   // Nhận broadcast từ GV
-      mqtt.subscribe("glasses/+/text"); // Nhận targeted (regexp logic sau)
-      String myTopic = "glasses/";
-      myTopic += DEVICE_ID;
-      myTopic += "/text";
-      mqtt.subscribe(myTopic.c_str()); // Nhận trực tiếp cho mình
-      mqtt.subscribe("ai/answer");     // Nhận câu trả lời từ AI
-      mqtt.subscribe("audio/control"); // Nhận lệnh điều khiển
+      mqtt.subscribe("glasses/text");          // Nhận text từ GV
+      mqtt.subscribe("ai/answer");             // Nhận câu trả lời từ AI
+      mqtt.subscribe("audio/control");         // Nhận lệnh điều khiển
+      mqtt.subscribe("classlink/config/wifi"); // ← NEW: WiFi OTA updates
+      Serial.println("[MQTT] ✅ Subscribed to classlink/config/wifi");
     } else {
       Serial.printf(" Failed (rc=%d)\n", mqtt.state());
       attempts++;
@@ -314,16 +448,14 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
   }
   Serial.printf("[MQTT] %s: %s\n", topic, msg.c_str());
 
-  // Nhận text từ GV - CHỈ khi AI mode TẮT
-  // Khi AI mode BẬT, học sinh đang tập trung hỏi AI, không nhận text GV
-  if (String(topic).startsWith("glasses/") && String(topic).endsWith("/text") &&
-      !aiAssistantActive) {
-    queuePush(msg); // Thêm vào hàng đợi
+  // MODE_CLASS: Nhận text từ giáo viên
+  if (String(topic) == "glasses/text" && currentMode == MODE_CLASS) {
+    queuePush(msg);
   }
 
-  // Nhận câu trả lời từ AI - LUÔN nhận (khi AI mode bật)
-  if (String(topic) == "ai/answer" && aiAssistantActive) {
-    queuePush(msg); // Hiển thị câu trả lời AI
+  // MODE_AI_ASSISTANT: Nhận câu trả lời từ AI
+  if (String(topic) == "ai/answer" && currentMode == MODE_AI_ASSISTANT) {
+    queuePush(msg);
   }
 
   // Nhận lệnh điều khiển
@@ -333,6 +465,31 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
     } else if (msg.indexOf("start") >= 0) {
       isRecording = true;
     }
+  }
+
+  // ====== NEW: WiFi OTA Update ======
+  if (String(topic) == "classlink/config/wifi") {
+    Serial.println("[MQTT] 📡 WiFi OTA config update received!");
+
+    // Parse JSON
+    StaticJsonDocument<256> doc;
+    DeserializationError error = deserializeJson(doc, msg);
+
+    if (error) {
+      Serial.printf("[MQTT][ERROR] JSON parse failed: %s\n", error.c_str());
+      return;
+    }
+
+    const char *new_ssid = doc["ssid"];
+    const char *new_password = doc["password"];
+
+    if (new_ssid == nullptr || new_password == nullptr) {
+      Serial.println("[MQTT][ERROR] Missing ssid or password");
+      return;
+    }
+
+    // Handle OTA update
+    wifi_ota_update(new_ssid, new_password);
   }
 }
 
@@ -372,44 +529,35 @@ void setupOLED() {
   Serial.println("[OLED] Display initialized");
 }
 
-// ====== Handle Button Presses ======
-void handleButtons() {
-  // Nút 1: Toggle Class ↔ Private
-  if (digitalRead(BTN_MODE_PIN) == LOW) {
-    if (millis() - lastBtnModePress > DEBOUNCE_DELAY) {
-      classMode = !classMode;
+// ====== Handle Single Button Press ======
+void handleButton() {
+  if (digitalRead(BTN_PIN) == LOW) {
+    if (millis() - lastBtnPress > DEBOUNCE_DELAY) {
+      // Cycle to next mode
+      currentMode = (OperatingMode)((currentMode + 1) % 3);
 
-      Serial.printf("[MODE] Switched to: %s\n",
-                    classMode ? "CLASS" : "PRIVATE");
+      Serial.printf("[BUTTON] Mode changed to: %s\n",
+                    getModeString(currentMode));
 
-      // Publish mode change
-      mqtt.publish("glasses/mode", classMode ? "class" : "private");
-
-      // Update display nếu không đang hiển thị text
-      if (displayState == DISPLAY_IDLE) {
-        updateDisplay();
+      // Publish mode to MQTT
+      const char *modeStr = "";
+      switch (currentMode) {
+      case MODE_CLASS:
+        modeStr = "class";
+        break;
+      case MODE_PRIVATE:
+        modeStr = "private";
+        break;
+      case MODE_AI_ASSISTANT:
+        modeStr = "ai";
+        break;
       }
+      mqtt.publish("glasses/mode", modeStr);
 
-      lastBtnModePress = millis();
-    }
-  }
+      // Update display
+      updateDisplay();
 
-  // Nút 2: Toggle AI Trợ Giảng
-  if (digitalRead(BTN_AI_PIN) == LOW) {
-    if (millis() - lastBtnAIPress > DEBOUNCE_DELAY) {
-      aiAssistantActive = !aiAssistantActive;
-
-      Serial.printf("[AI] Assistant: %s\n", aiAssistantActive ? "ON" : "OFF");
-
-      // Publish AI state
-      mqtt.publish("glasses/ai", aiAssistantActive ? "on" : "off");
-
-      // Update display nếu không đang hiển thị text
-      if (displayState == DISPLAY_IDLE) {
-        updateDisplay();
-      }
-
-      lastBtnAIPress = millis();
+      lastBtnPress = millis();
     }
   }
 }
@@ -418,54 +566,52 @@ void handleButtons() {
 void updateDisplay() {
   display.clearDisplay();
 
-  // Header
-  display.setTextSize(1);
+  // Header - Mode name (Large text)
+  display.setTextSize(2);
   display.setCursor(0, 0);
-  display.print("Mode: ");
-  display.println(classMode ? "CLASS" : "PRIVATE");
 
-  // AI Status
-  display.setCursor(0, 12);
-  display.print("AI: ");
-  if (aiAssistantActive) {
-    display.println("ACTIVE");
-  } else {
-    display.println("OFF");
+  switch (currentMode) {
+  case MODE_CLASS:
+    display.println("CLASS");
+    break;
+  case MODE_PRIVATE:
+    display.println("PRIVATE");
+    break;
+  case MODE_AI_ASSISTANT:
+    display.println("AI MODE");
+    break;
   }
 
   // Divider
-  display.drawLine(0, 24, 128, 24, SSD1306_WHITE);
+  display.drawLine(0, 20, 128, 20, SSD1306_WHITE);
 
-  // Status icons
-  display.setCursor(0, 28);
+  // Status icons (Small text)
+  display.setTextSize(1);
+  display.setCursor(0, 26);
   display.print("WiFi: ");
   display.println(WiFi.status() == WL_CONNECTED ? "OK" : "X");
 
-  display.setCursor(0, 40);
+  display.setCursor(0, 38);
   display.print("MQTT: ");
   display.println(mqtt.connected() ? "OK" : "X");
 
   // Recording indicator
-  if (isRecording) {
+  if (isRecording && currentMode != MODE_PRIVATE) {
     display.fillCircle(120, 56, 5, SSD1306_WHITE);
   }
 
   display.display();
 }
 
-// ====== Non-blocking Display Text with Typewriter Scroll Effect ======
-
-// Display constants - tính toán tự động từ screen parameters
+// ====== Display Text with Typewriter Scroll Effect ======
 #define TEXT_SIZE 2
-#define CHAR_WIDTH_PX (6 * TEXT_SIZE) // Font 6x8, scale 2 = 12px
-#define CHARS_PER_LINE (SCREEN_WIDTH / CHAR_WIDTH_PX)     // = 10 chars
-#define LINE_HEIGHT_PX (8 * TEXT_SIZE)                    // = 16px
-#define LINES_PER_SCREEN (SCREEN_HEIGHT / LINE_HEIGHT_PX) // = 4 lines
-#define CHAR_DELAY_MS 50 // Giảm từ 80ms xuống 50ms để tăng tốc độ
-#define END_DISPLAY_DELAY_MS                                                   \
-  3000 // Thời gian giữ màn hình sau khi hiển thị xong
+#define CHAR_WIDTH_PX (6 * TEXT_SIZE)
+#define CHARS_PER_LINE (SCREEN_WIDTH / CHAR_WIDTH_PX)
+#define LINE_HEIGHT_PX (8 * TEXT_SIZE)
+#define LINES_PER_SCREEN (SCREEN_HEIGHT / LINE_HEIGHT_PX)
+#define CHAR_DELAY_MS 50
+#define END_DISPLAY_DELAY_MS 3000
 
-// Buffer lưu các dòng đang hiển thị
 String displayLines[LINES_PER_SCREEN];
 int currentLineIdx = 0;
 String currentLineBuffer = "";
@@ -479,7 +625,6 @@ void clearDisplayBuffer() {
 }
 
 void scrollUpDisplay() {
-  // Đẩy tất cả dòng lên 1 bậc
   for (int i = 0; i < LINES_PER_SCREEN - 1; i++) {
     displayLines[i] = displayLines[i + 1];
   }
@@ -498,137 +643,88 @@ void refreshDisplayText() {
   display.display();
 }
 
-// Bắt đầu hiển thị text (non-blocking)
-void startDisplayText(const char *text) {
+void displayText(const char *text) {
   String textStr = String(text);
 
-  Serial.printf("[DISPLAY] Starting text: %s\n", text);
-
-  // Reset state
-  displayState = DISPLAY_SHOWING_CHAR;
-  currentCharIndex = 0;
-  currentWordIndex = 0;
-  currentMessageWordCount = 0;
-  isDisplayingText = true;
+  Serial.printf("[DISPLAY] Text: %s\n", text);
 
   clearDisplayBuffer();
   refreshDisplayText();
 
   // Tách thành các từ
+  int wordCount = 0;
+  String words[100];
+
   int startIdx = 0;
   for (int i = 0; i <= textStr.length(); i++) {
     if (i == textStr.length() || textStr[i] == ' ') {
       if (i > startIdx) {
-        currentMessageWords[currentMessageWordCount++] =
-            textStr.substring(startIdx, i);
+        words[wordCount++] = textStr.substring(startIdx, i);
       }
       startIdx = i + 1;
     }
   }
 
-  Serial.printf("[DISPLAY] Split into %d words\n", currentMessageWordCount);
-  lastDisplayUpdate = millis();
-}
+  // Hiển thị từng từ với typewriter effect
+  for (int w = 0; w < wordCount; w++) {
+    String word = words[w];
 
-// Update display state (gọi từ loop)
-void updateDisplayText() {
-  if (displayState == DISPLAY_IDLE) {
-    return; // Không có gì để hiển thị
-  }
+    String testLine =
+        currentLineBuffer.length() == 0 ? word : currentLineBuffer + " " + word;
 
-  unsigned long now = millis();
+    if (testLine.length() > CHARS_PER_LINE) {
+      displayLines[currentLineIdx] = currentLineBuffer;
+      currentLineIdx++;
 
-  if (displayState == DISPLAY_SHOWING_CHAR) {
-    // Kiểm tra xem đã đến lúc hiển thị ký tự tiếp theo chưa
-    if (now - lastDisplayUpdate < CHAR_DELAY_MS) {
-      return; // Chưa đến lúc
-    }
-
-    // Đến lúc hiển thị ký tự/từ tiếp theo
-    if (currentWordIndex >= currentMessageWordCount) {
-      // Hết từ - chuyển sang chế độ chờ
-      displayState = DISPLAY_WAITING_END;
-      lastDisplayUpdate = now;
-      Serial.println("[DISPLAY] Finished showing all text");
-      return;
-    }
-
-    String word = currentMessageWords[currentWordIndex];
-
-    // Nếu đang ở đầu từ mới
-    if (currentCharIndex == 0) {
-      // Kiểm tra xem từ có fit trên dòng hiện tại không
-      String testLine = currentLineBuffer.length() == 0
-                            ? word
-                            : currentLineBuffer + " " + word;
-
-      // Sử dụng UTF-8 aware length check
-      int testLineChars = utf8CharCount(testLine);
-
-      if (testLineChars > CHARS_PER_LINE) {
-        // Không fit - lưu dòng hiện tại và xuống dòng mới
-        displayLines[currentLineIdx] = currentLineBuffer;
-        currentLineIdx++;
-
-        // Nếu hết màn hình - scroll lên
-        if (currentLineIdx >= LINES_PER_SCREEN) {
-          scrollUpDisplay();
-          currentLineIdx = LINES_PER_SCREEN - 1;
-        }
-
-        currentLineBuffer = "";
+      if (currentLineIdx >= LINES_PER_SCREEN) {
+        scrollUpDisplay();
+        currentLineIdx = LINES_PER_SCREEN - 1;
       }
 
-      // Thêm khoảng trắng nếu không phải đầu dòng
-      if (currentLineBuffer.length() > 0) {
-        currentLineBuffer += " ";
-        displayLines[currentLineIdx] = currentLineBuffer;
-        refreshDisplayText();
-        lastDisplayUpdate = now;
-        currentCharIndex = -1; // Signal để lần sau add ký tự
-        return;
-      }
+      currentLineBuffer = "";
     }
 
-    // Thêm ký tự tiếp theo của từ
-    if (currentCharIndex >= 0 && currentCharIndex < word.length()) {
-      currentLineBuffer += word[currentCharIndex];
+    if (currentLineBuffer.length() > 0) {
+      currentLineBuffer += " ";
       displayLines[currentLineIdx] = currentLineBuffer;
       refreshDisplayText();
-      currentCharIndex++;
-      lastDisplayUpdate = now;
-
-      // Kiểm tra xem hết từ chưa
-      if (currentCharIndex >= word.length()) {
-        currentWordIndex++;
-        currentCharIndex = 0;
-      }
+      delay(CHAR_DELAY_MS);
     }
-  } else if (displayState == DISPLAY_WAITING_END) {
-    // Đợi 3 giây trước khi quay về màn hình status
-    if (now - lastDisplayUpdate >= END_DISPLAY_DELAY_MS) {
-      Serial.println("[DISPLAY] Returning to status screen");
-      updateDisplay();
-      displayState = DISPLAY_IDLE;
-      isDisplayingText = false;
+
+    for (int c = 0; c < word.length(); c++) {
+      currentLineBuffer += word[c];
+      displayLines[currentLineIdx] = currentLineBuffer;
+      refreshDisplayText();
+      delay(CHAR_DELAY_MS);
     }
   }
+
+  delay(END_DISPLAY_DELAY_MS);
+
+  // Quay về màn hình status
+  updateDisplay();
 }
 
 // ====== Send Audio Packet ======
 void sendAudioPacket() {
   size_t bytesRead = 0;
 
-  // Read from I2S microphone
   i2s_read(I2S_PORT, audioBuffer, BUFFER_LEN, &bytesRead, portMAX_DELAY);
 
   if (bytesRead > 0) {
-    // Create packet with header
-    // Header: 1 byte flags + 4 bytes sequence
-    // Flags: bit 0 = AI mode, bit 1 = class mode
+    // Header: 4 bytes sequence + 1 byte flags
+    // Flags: bit 0 = AI mode, bit 1-2 = mode type
     uint8_t packet[5 + BUFFER_LEN];
-    packet[0] = (aiAssistantActive ? 0x01 : 0x00) | (classMode ? 0x02 : 0x00);
-    memcpy(packet + 1, &packetSequence, 4);
+    memcpy(packet, &packetSequence, 4);
+
+    // Encode mode in flags
+    uint8_t flags = 0;
+    if (currentMode == MODE_AI_ASSISTANT) {
+      flags |= 0x01; // AI mode bit
+    }
+    flags |= (currentMode << 1); // Encode mode in bits 1-2
+
+    packet[4] = flags;
     memcpy(packet + 5, audioBuffer, bytesRead);
 
     // Send UDP
@@ -641,17 +737,16 @@ void sendAudioPacket() {
 }
 
 // ====== Process Message Queue ======
-// Non-blocking: Kiểm tra và hiển thị message tiếp theo từ queue
 void processMessageQueue() {
-  // Chỉ bắt đầu message mới nếu đang IDLE
-  if (displayState != DISPLAY_IDLE || queueIsEmpty()) {
+  if (isDisplayingText || queueIsEmpty()) {
     return;
   }
 
-  // Lấy message tiếp theo từ queue
   String msg = queuePop();
   if (msg.length() > 0) {
+    isDisplayingText = true;
     Serial.printf("[QUEUE] Processing message: %s\n", msg.c_str());
-    startDisplayText(msg.c_str()); // Non-blocking!
+    displayText(msg.c_str());
+    isDisplayingText = false;
   }
 }

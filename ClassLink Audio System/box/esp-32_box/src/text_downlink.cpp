@@ -9,7 +9,9 @@
  * Raspberry Pi → UART → ESP32 Box → MQTT → Glasses OLED
  *************************************************/
 
+#include "../include/wifi_config.h"
 #include <Arduino.h>
+#include <ArduinoJson.h>
 #include <PubSubClient.h>
 #include <WiFi.h>
 
@@ -28,6 +30,7 @@ static int bufferPos = 0;
 
 // ====== Forward declarations ======
 void text_downlink_parse_and_publish(const String &line);
+void mqtt_callback(char *topic, byte *payload, unsigned int length);
 
 // ====== Public API ======
 void text_downlink_init() {
@@ -38,6 +41,7 @@ void text_downlink_init() {
   mqttClient = new PubSubClient(mqttWifiClient);
 
   mqttClient->setServer(MQTT_SERVER, MQTT_PORT);
+  mqttClient->setCallback(mqtt_callback);
 
   // Try to connect
   int attempts = 0;
@@ -46,6 +50,15 @@ void text_downlink_init() {
 
     if (mqttClient->connect("ESP32_Box_TextDownlink")) {
       Serial.println(" Connected!");
+
+      // Subscribe to WiFi config topic for OTA updates
+      if (mqttClient->subscribe("classlink/config/wifi")) {
+        Serial.println(
+            "[TEXT_DOWNLINK] ✅ Subscribed to classlink/config/wifi");
+      } else {
+        Serial.println(
+            "[TEXT_DOWNLINK][WARN] Failed to subscribe to WiFi config topic");
+      }
     } else {
       Serial.printf(" Failed (rc=%d)\n", mqttClient->state());
       attempts++;
@@ -67,6 +80,9 @@ void text_downlink_loop() {
     // Try to reconnect (non-blocking, only 1 attempt per loop)
     if (mqttClient->connect("ESP32_Box_TextDownlink")) {
       Serial.println("[TEXT_DOWNLINK] MQTT reconnected");
+
+      // Re-subscribe after reconnect
+      mqttClient->subscribe("classlink/config/wifi");
     }
   }
 
@@ -163,5 +179,62 @@ void text_downlink_send(const char *deviceId, const char *text) {
                   text);
   } else {
     Serial.println("[TEXT_DOWNLINK][ERROR] Send failed");
+  }
+}
+
+// ====== MQTT Callback Handler ======
+void mqtt_callback(char *topic, byte *payload, unsigned int length) {
+  // Convert payload to string
+  char message[512];
+  if (length >= sizeof(message)) {
+    Serial.println("[MQTT] Message too large, truncating");
+    length = sizeof(message) - 1;
+  }
+
+  memcpy(message, payload, length);
+  message[length] = '\0';
+
+  Serial.printf("[MQTT] Received on topic '%s': %s\n", topic, message);
+
+  // Handle WiFi config updates
+  if (strcmp(topic, "classlink/config/wifi") == 0) {
+    Serial.println("[MQTT] 📡 WiFi OTA config update received!");
+
+    // Parse JSON
+    StaticJsonDocument<256> doc;
+    DeserializationError error = deserializeJson(doc, message);
+
+    if (error) {
+      Serial.printf("[MQTT][ERROR] JSON parse failed: %s\n", error.c_str());
+      return;
+    }
+
+    // Extract SSID and password
+    const char *new_ssid = doc["ssid"];
+    const char *new_password = doc["password"];
+
+    if (new_ssid == nullptr || new_password == nullptr) {
+      Serial.println("[MQTT][ERROR] Missing ssid or password in config");
+      return;
+    }
+
+    Serial.printf("[MQTT] Updating WiFi AP to: %s\n", new_ssid);
+
+    // ⏰ CRITICAL: Wait 3 seconds for other devices (Glasses, Micro) to receive
+    // this message All devices subscribe to the same topic and must save
+    // credentials before ESP32 Box restarts AP
+    Serial.println(
+        "[MQTT] ⏰ Waiting 3 seconds for other devices to receive config...");
+    for (int i = 3; i > 0; i--) {
+      Serial.printf("[MQTT]    Restarting WiFi AP in %d seconds...\n", i);
+      delay(1000);
+    }
+
+    // Update WiFi credentials (will restart AP)
+    if (wifi_update_credentials(new_ssid, new_password)) {
+      Serial.println("[MQTT] ✅ WiFi config updated successfully!");
+    } else {
+      Serial.println("[MQTT][ERROR] Failed to update WiFi config");
+    }
   }
 }
