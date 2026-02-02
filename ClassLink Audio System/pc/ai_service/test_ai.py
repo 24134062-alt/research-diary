@@ -28,24 +28,24 @@ if not api_key:
     exit(1)
 print(f"[OK] API Key found: {api_key[:10]}...{api_key[-4:]}")
 
-# Test Gemini API with new package
-print("\n[TEST] Testing Gemini API with gemini-2.5-flash model...")
-from google import genai
+# Test Gemini API with correct package
+print("\n[TEST] Testing Gemini API with gemini-2.0-flash-exp model...")
+import google.generativeai as genai
 
 try:
-    # Create client with API key
-    client = genai.Client(api_key=api_key)
+    # Configure API key
+    genai.configure(api_key=api_key)
     
-    # Use gemini-2.5-flash (different rate limit pool)
-    response = client.models.generate_content(
-        model="gemini-2.5-flash",
-        contents="Xin chao, ban la ai? Tra loi ngan gon bang tieng Viet."
-    )
+    # Use gemini-2.0-flash-exp (fast and efficient)
+    model = genai.GenerativeModel('gemini-2.0-flash-exp')
+    response = model.generate_content("Xin chao, ban la ai? Tra loi ngan gon bang tieng Viet.")
+    
     print(f"\n[OK] Gemini response:\n{response.text}")
     
     print("\n" + "="*50)
     print("AI SERVICE READY!")
     print("="*50)
+
     
 except Exception as e:
     print(f"[ERROR] {e}")
