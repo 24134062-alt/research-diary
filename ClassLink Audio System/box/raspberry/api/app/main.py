@@ -73,7 +73,7 @@ uart_service.set_callback(bridge_uart_to_mqtt)
 BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
 
-# Mount Static Files with absolute path
+# Mount Static Files ONCE with absolute path (including downloads subfolder)
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 # Include routers
@@ -84,10 +84,6 @@ app.include_router(stt.router, prefix="/api", tags=["STT"])
 app.include_router(system.router, prefix="/api/system", tags=["System"])
 app.include_router(document.router, prefix="/api/document", tags=["Document"])
 
-# Mount static files directory for downloads
-static_dir = Path(__file__).parent / "static"
-if static_dir.exists():
-    app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
 @app.on_event("startup")
 async def startup_event():
