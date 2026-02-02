@@ -39,8 +39,12 @@ class AITeachingAssistant:
             self.client = None
         else:
             try:
-                self.client = genai.Client(api_key=self.api_key)
-                logger.info(f"AI Teaching Assistant initialized with RAG + Caching")
+                # Force API version v1 to avoid v1beta 404 issues
+                self.client = genai.Client(
+                    api_key=self.api_key, 
+                    http_options={'api_version': 'v1'}
+                )
+                logger.info(f"AI Teaching Assistant initialized (v1 API)")
             except Exception as e:
                 logger.error(f"Failed to initialize Gemini client: {e}. Switching to DEMO mode.")
                 self.is_demo_mode = True
@@ -162,10 +166,10 @@ class AITeachingAssistant:
         
         # Complex math/reasoning → Pro
         if any(kw in question_lower for kw in ["chứng minh", "giải thích tại sao", "phân tích"]):
-            return "gemini-1.5-pro"
+            return "gemini-1.5-pro-002"
         
         # Default: Flash (fast and cheap)
-        return "gemini-1.5-flash"
+        return "gemini-1.5-flash-002"
     
     def _retrieve_context(self, question: str, n_results: int = 3) -> str:
         """Retrieve relevant context from vector DB."""
