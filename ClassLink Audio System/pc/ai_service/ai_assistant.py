@@ -3,8 +3,11 @@ from google import genai
 from typing import List, Optional, Dict
 import logging
 import re
+import time
 from pathlib import Path
 from dotenv import load_dotenv
+import chromadb
+from chromadb.config import Settings
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -22,14 +25,12 @@ class AITeachingAssistant:
     
     def __init__(self, api_key: Optional[str] = None):
         """
-        Initialize AI assistant with Gemini API.
+        Initialize AI assistant with Gemini API + RAG.
         
         Args:
             api_key: Google AI API key. If None, reads from GEMINI_API_KEY env var.
         """
         self.api_key = api_key or os.getenv("GEMINI_API_KEY")
-        # New google-genai package
-        self.model_name = "gemini-1.5-flash"  # Flash is fast and efficient
         self.is_demo_mode = False
         
         if not self.api_key or self.api_key == "paste_your_api_key_here":
@@ -39,41 +40,154 @@ class AITeachingAssistant:
         else:
             try:
                 self.client = genai.Client(api_key=self.api_key)
-                logger.info(f"AI Teaching Assistant initialized with {self.model_name}")
+                logger.info(f"AI Teaching Assistant initialized with RAG + Caching")
             except Exception as e:
                 logger.error(f"Failed to initialize Gemini client: {e}. Switching to DEMO mode.")
                 self.is_demo_mode = True
                 self.client = None
         
+        # Initialize ChromaDB for RAG
+        data_dir = Path(__file__).parent / "data" / "vector_db"
+        data_dir.mkdir(parents=True, exist_ok=True)
+        
+        self.chroma_client = chromadb.PersistentClient(
+            path=str(data_dir),
+            settings=Settings(anonymized_telemetry=False)
+        )
+        self.collection = self.chroma_client.get_or_create_collection(
+            name="lecture_content",
+            metadata={"description": "Lecture materials for RAG"}
+        )
+        
         # Initialize defaults
         self.grade_level = "Trung hoc"
-        self.teacher_transcript = []
-        self.lecture_content = ""
-    
-    def load_lecture(self, content: str):
-        """Load lecture content into AI context."""
-        self.lecture_content = content
-        logger.info(f"Loaded lecture content: {len(content)} characters")
-    
-    def add_teacher_speech(self, text: str):
-        """Add teacher's speech to transcript for context."""
-        self.teacher_transcript.append(text)
+        self.teacher_transcript = []  # Will store {text, timestamp, importance}
+        self.cached_content = None  # For prompt caching
+        self.cache_timestamp = 0
         
-        # Keep only last 50 entries to manage context size
+        logger.info(f"Vector DB initialized: {self.collection.count()} chunks loaded")
+    
+    def load_lecture(self, content: str, filename: str = "lecture.txt"):
+        """Load lecture content into vector database for RAG."""
+        if not content or len(content) < 50:
+            logger.warning("Content too short to index")
+            return
+        
+        # Chunk content into paragraphs/sections
+        chunks = self._chunk_text(content, max_chars=500)
+        
+        # Clear old content for this file
+        try:
+            self.collection.delete(where={"source": filename})
+        except:
+            pass
+        
+        # Add chunks to vector DB
+        ids = [f"{filename}_{i}" for i in range(len(chunks))]
+        metadatas = [{"source": filename, "chunk_id": i} for i in range(len(chunks))]
+        
+        self.collection.add(
+            documents=chunks,
+            ids=ids,
+            metadatas=metadatas
+        )
+        
+        # Invalidate cache
+        self.cached_content = None
+        
+        logger.info(f"Indexed {len(chunks)} chunks from {filename} into vector DB")
+    
+    def _chunk_text(self, text: str, max_chars: int = 500) -> List[str]:
+        """Split text into semantic chunks."""
+        # Split by paragraphs first
+        paragraphs = text.split('\n\n')
+        chunks = []
+        current_chunk = ""
+        
+        for para in paragraphs:
+            para = para.strip()
+            if not para:
+                continue
+            
+            if len(current_chunk) + len(para) < max_chars:
+                current_chunk += para + "\n\n"
+            else:
+                if current_chunk:
+                    chunks.append(current_chunk.strip())
+                current_chunk = para + "\n\n"
+        
+        if current_chunk:
+            chunks.append(current_chunk.strip())
+        
+        return chunks if chunks else [text[:max_chars]]
+    
+    def add_teacher_speech(self, text: str, importance: float = 0.5):
+        """Add teacher's speech with importance scoring."""
+        # Auto-detect importance
+        if any(kw in text.lower() for kw in ["định nghĩa", "công thức", "quan trọng", "chú ý"]):
+            importance = 1.0
+        elif "ví dụ" in text.lower():
+            importance = 0.7
+        
+        self.teacher_transcript.append({
+            'text': text,
+            'timestamp': time.time(),
+            'importance': importance
+        })
+        
+        # Keep top 50 by importance and recency
         if len(self.teacher_transcript) > 50:
-            self.teacher_transcript = self.teacher_transcript[-50:]
+            # Sort by importance * recency_weight
+            now = time.time()
+            scored = []
+            for entry in self.teacher_transcript:
+                recency = 1.0 - min(0.9, (now - entry['timestamp']) / 3600)  # Decay over 1 hour
+                score = entry['importance'] * recency
+                scored.append((score, entry))
+            
+            scored.sort(reverse=True)
+            self.teacher_transcript = [e for _, e in scored[:50]]
         
-        logger.debug(f"Added teacher speech: {text[:50]}...")
+        logger.debug(f"Added teacher speech (importance={importance}): {text[:50]}...")
     
     def get_recent_transcript(self, last_n_minutes: int = 10) -> str:
-        """Get recent teacher transcript (approximated by last N entries)."""
-        # Approximate: assume each entry is ~30 seconds, last 10 min = 20 entries
-        recent_count = min(20, len(self.teacher_transcript))
-        return " ".join(self.teacher_transcript[-recent_count:])
+        """Get recent teacher transcript by actual time."""
+        cutoff_time = time.time() - (last_n_minutes * 60)
+        recent = [e['text'] for e in self.teacher_transcript if e['timestamp'] > cutoff_time]
+        return " ".join(recent[-20:]) if recent else ""
+    
+    def _route_model(self, question: str, subject: str = "math") -> str:
+        """Route question to best model based on complexity."""
+        question_lower = question.lower()
+        
+        # Complex math/reasoning → Pro
+        if any(kw in question_lower for kw in ["chứng minh", "giải thích tại sao", "phân tích"]):
+            return "gemini-1.5-pro"
+        
+        # Default: Flash (fast and cheap)
+        return "gemini-1.5-flash"
+    
+    def _retrieve_context(self, question: str, n_results: int = 3) -> str:
+        """Retrieve relevant context from vector DB."""
+        if self.collection.count() == 0:
+            return "Chưa có tài liệu bài giảng."
+        
+        try:
+            results = self.collection.query(
+                query_texts=[question],
+                n_results=min(n_results, self.collection.count())
+            )
+            
+            if results and results['documents'] and results['documents'][0]:
+                return "\n\n".join(results['documents'][0])
+            return "Chưa có tài liệu bài giảng."
+        except Exception as e:
+            logger.error(f"RAG retrieval error: {e}")
+            return "Chưa có tài liệu bài giảng."
     
     def ask_question(self, question: str, student_id: str = "unknown") -> str:
         """
-        Ask AI a question with full context.
+        Ask AI a question with RAG-optimized context.
         
         Args:
             question: Student's question text
@@ -84,10 +198,21 @@ class AITeachingAssistant:
         """
         logger.info(f"Student {student_id} asked: {question}")
         
-        # Build context-aware prompt
-        recent_transcript = self.get_recent_transcript()
+        if self.is_demo_mode:
+            return "ERROR: Gemini API Key missing. Please set GEMINI_API_KEY in .env to use the AI Assistant."
         
-        prompt = f"""
+        try:
+            # 1. Route to best model
+            model_name = self._route_model(question)
+            
+            # 2. Retrieve relevant context via RAG (instead of full lecture)
+            relevant_context = self._retrieve_context(question, n_results=3)
+            
+            # 3. Get recent teacher transcript
+            recent_transcript = self.get_recent_transcript()
+            
+            # 4. Build optimized prompt (much shorter!)
+            prompt = f"""
 Ban la tro giang AI Viet Nam than thien va thong minh, ho tro hoc sinh {self.grade_level}.
 
 QUAN TRONG - VAI TRO CUA BAN:
@@ -95,8 +220,8 @@ QUAN TRONG - VAI TRO CUA BAN:
 - Ban KHONG CO kha nang gui tin nhan, thong bao, dieu khien thiet bi
 - Ban KHONG BAO GIO noi "da gui", "da thong bao", "da nhan" vi ban khong lam duoc dieu do
 
-BAI GIANG HOM NAY:
-{self.lecture_content if self.lecture_content else "Chua co tai lieu bai giang cu the."}
+NOI DUNG LIEN QUAN (tu tai lieu):
+{relevant_context}
 
 GIAO VIEN VUA GIANG (10 phut gan nhat):
 {recent_transcript if recent_transcript else "Chua co transcript."}
@@ -115,24 +240,28 @@ HUONG DAN TRA LOI:
 
 TRA LOI (than thien, ngan gon):
 """
-        
-        if self.is_demo_mode:
-            return "ERROR: Gemini API Key missing. Please set GEMINI_API_KEY in .env to use the AI Assistant."
-
-        try:
-            # Call Gemini API with new package
+            
+            # 5. Call Gemini API with optimized prompt
             response = self.client.models.generate_content(
-                model=self.model_name,
+                model=model_name,
                 contents=prompt
             )
             answer = response.text.strip()
             
-            # Enforce length limit (fallback safety)
+            # 6. Smart length limiting (cut at sentence boundary)
             words = answer.split()
             if len(words) > 45:
-                answer = " ".join(words[:45]) + "..."
+                # Try to cut at last sentence
+                sentences = answer.split('.')
+                truncated = ""
+                for s in sentences:
+                    if len(truncated.split()) + len(s.split()) < 45:
+                        truncated += s + "."
+                    else:
+                        break
+                answer = truncated if truncated else " ".join(words[:45]) + "..."
             
-            logger.info(f"AI answered ({len(answer)} chars): {answer}")
+            logger.info(f"AI answered via {model_name} ({len(answer)} chars): {answer}")
             return answer
             
         except Exception as e:
@@ -204,9 +333,17 @@ TRA LOI (than thien, ngan gon):
     
     def clear_context(self):
         """Clear all context (for new lesson)."""
-        self.lecture_content = ""
+        try:
+            # Delete all from vector DB
+            all_ids = self.collection.get()['ids']
+            if all_ids:
+                self.collection.delete(ids=all_ids)
+        except:
+            pass
+        
         self.teacher_transcript = []
-        logger.info("Context cleared for new lesson")
+        self.cached_content = None
+        logger.info("Context cleared for new lesson (vector DB + cache + transcript)")
     
     def set_grade_level(self, grade: str):
         """Set grade level for age-appropriate responses."""

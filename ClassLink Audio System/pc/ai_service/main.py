@@ -133,9 +133,9 @@ class AIService:
                 
                 if action == "load":
                     content = data.get("content", "")
-                    filename = data.get("filename", "")
-                    self.ai_assistant.load_lecture(content)
-                    logger.info(f"📄 LOADED DOCUMENT: {filename} ({len(content)} chars)")
+                    filename = data.get("filename", "lecture.txt")
+                    self.ai_assistant.load_lecture(content, filename)
+                    logger.info(f"📄 LOADED DOCUMENT into vector DB: {filename} ({len(content)} chars)")
                 elif action == "clear":
                     self.ai_assistant.clear_context()
                     logger.info("📄 CLEARED DOCUMENT CONTEXT")
@@ -403,8 +403,10 @@ class AIService:
     def load_document(self, file_path: str):
         content = DocumentProcessor.extract_text(file_path)
         if content:
-            self.ai_assistant.load_lecture(content)
-            logger.info(f"Loaded document: {file_path}")
+            import os
+            filename = os.path.basename(file_path)
+            self.ai_assistant.load_lecture(content, filename)
+            logger.info(f"Loaded document into vector DB: {filename}")
         else:
             logger.error(f"Failed to load document: {file_path}")
 

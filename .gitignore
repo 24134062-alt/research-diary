@@ -144,6 +144,12 @@ ENV/
 env.bak/
 venv.bak/
 
+# ClassLink AI Service - CRITICAL: Contains API keys!
+config.env
+*.log
+data/vector_db/
+*.vbs
+
 # Spyder project settings
 .spyderproject
 .spyproject
