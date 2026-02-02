@@ -1641,37 +1641,38 @@ async function checkPCStatus() {
     const loadingStatus = document.getElementById('pc-loading-status');
 
     if (loadingEl) loadingEl.style.display = 'block';
-    if (loadingStatus) loadingStatus.textContent = 'Đang ping PC AI Service...';
+    if (loadingStatus) loadingStatus.textContent = 'Đang kiểm tra kết nối qua Pi...';
 
     try {
-        // Try to ping AI service on PC (assuming it runs on port 12346)
-        // This is a basic check - can be enhanced later
-        const response = await fetch('http://localhost:12346/health', {
-            method: 'GET',
-            timeout: 3000
-        });
+        // Use Pi's API to check MQTT heartbeat status of PC
+        const response = await fetch(`${API_URL}/api/system/pc-status`);
+        const data = await response.json();
 
-        if (response.ok) {
+        if (data.connected) {
             // AI Service is running!
             if (statusEl) {
                 statusEl.innerHTML = `
                     <span style="width: 8px; height: 8px; background: #22c55e; border-radius: 50%;"></span>
-                    <span style="color: #86efac;">Đã kết nối</span>
+                    <span style="color: #86efac;">Đã kết nối (PC Online)</span>
                 `;
             }
-            showToast('✅ PC AI Service đang chạy!', 'success');
+            showToast('✅ PC AI Service đang hoạt động!', 'success');
+        } else {
+            // PC not connected or no heartbeat
+            if (statusEl) {
+                statusEl.innerHTML = `
+                    <span style="width: 8px; height: 8px; background: #ef4444; border-radius: 50%;"></span>
+                    <span style="color: #fca5a5;">Chưa kết nối</span>
+                `;
+            }
+            showToast('⚠️ Không tìm thấy PC AI Service. Hãy chạy start.bat trên PC', 'warning');
         }
     } catch (error) {
-        // AI Service not found
-        if (statusEl) {
-            statusEl.innerHTML = `
-                <span style="width: 8px; height: 8px; background: #ef4444; border-radius: 50%;"></span>
-                <span style="color: #fca5a5;">Chưa kết nối</span>
-            `;
-        }
-        showToast('⚠️ Không tìm thấy AI Service trên PC. Hãy cài đặt và chạy start.bat', 'warning');
+        console.error("PC status check failed:", error);
+        showToast('❌ Lỗi kiểm tra trạng thái PC.', 'error');
     } finally {
         if (loadingEl) loadingEl.style.display = 'none';
     }
 }
+
 
