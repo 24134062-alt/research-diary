@@ -1610,3 +1610,68 @@ function clearMicTranscription() {
         container.innerHTML = '<p style="color: #71717a; text-align: center;">Văn bản đã được xóa</p>';
     }
 }
+
+// ============================================
+// PC AI SERVICE INSTALLER FUNCTIONS
+// ============================================
+
+function downloadPCInstaller() {
+    showToast('📥 Đang tải xuống...', 'info');
+
+    // Direct download link
+    const downloadUrl = '/static/downloads/ClassLink-AI-Service-v2.0.zip';
+
+    // Create temporary link and trigger download
+    const link = document.createElement('a');
+    link.href = downloadUrl;
+    link.download = 'ClassLink-AI-Service-v2.0.zip';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    // Show success toast after a short delay
+    setTimeout(() => {
+        showToast('✅ File đã tải xuống! Kiểm tra thư mục Downloads', 'success');
+    }, 1000);
+}
+
+async function checkPCStatus() {
+    const statusEl = document.getElementById('pc-status');
+    const loadingEl = document.getElementById('pc-loading');
+    const loadingStatus = document.getElementById('pc-loading-status');
+
+    if (loadingEl) loadingEl.style.display = 'block';
+    if (loadingStatus) loadingStatus.textContent = 'Đang ping PC AI Service...';
+
+    try {
+        // Try to ping AI service on PC (assuming it runs on port 12346)
+        // This is a basic check - can be enhanced later
+        const response = await fetch('http://localhost:12346/health', {
+            method: 'GET',
+            timeout: 3000
+        });
+
+        if (response.ok) {
+            // AI Service is running!
+            if (statusEl) {
+                statusEl.innerHTML = `
+                    <span style="width: 8px; height: 8px; background: #22c55e; border-radius: 50%;"></span>
+                    <span style="color: #86efac;">Đã kết nối</span>
+                `;
+            }
+            showToast('✅ PC AI Service đang chạy!', 'success');
+        }
+    } catch (error) {
+        // AI Service not found
+        if (statusEl) {
+            statusEl.innerHTML = `
+                <span style="width: 8px; height: 8px; background: #ef4444; border-radius: 50%;"></span>
+                <span style="color: #fca5a5;">Chưa kết nối</span>
+            `;
+        }
+        showToast('⚠️ Không tìm thấy AI Service trên PC. Hãy cài đặt và chạy start.bat', 'warning');
+    } finally {
+        if (loadingEl) loadingEl.style.display = 'none';
+    }
+}
+
