@@ -59,8 +59,11 @@ class UDPGateway:
                         
             except Exception as e:
                 if self.running:
-                    print(f"[Gateway] Error in loop: {e}")
+                    # Suppress "Resource temporarily unavailable" spam (errno 11 = EAGAIN, normal when no data)
+                    if "Resource temporarily unavailable" not in str(e):
+                        print(f"[Gateway] Error in loop: {e}")
                 await asyncio.sleep(0.01)
+
 
     def stop(self):
         self.running = False
