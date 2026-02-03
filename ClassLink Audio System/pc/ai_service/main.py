@@ -29,9 +29,6 @@ AUDIO_DURATION_SECONDS = 3
 MAX_AUDIO_BUFFER = SAMPLE_RATE * SAMPLE_WIDTH * AUDIO_DURATION_SECONDS  # 96000 bytes = 3s audio
 HEARTBEAT_INTERVAL = 10.0
 
-# Load environment variables from .env file
-load_dotenv()
-
 # Configure logging to both console and file
 logging.basicConfig(
     level=logging.INFO,
