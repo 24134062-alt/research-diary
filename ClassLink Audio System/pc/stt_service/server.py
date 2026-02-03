@@ -74,7 +74,7 @@ class AudioUDPServer:
 
     def broadcast_text(self, text: str):
         if not self.mqtt_client.is_connected():
-            logger.warn("MQTT not connected, skipping publish")
+            logger.warning(\"MQTT not connected, skipping publish\")"
             return
 
         # Glasses protocol: raw string for direct display

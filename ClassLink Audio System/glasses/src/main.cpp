@@ -31,8 +31,11 @@ WiFiNetwork wifi_list[MAX_WIFI_NETWORKS];
 Preferences wifi_prefs;
 
 // ====== MQTT Config - Raspberry Pi ======
+// Default IP, can be overridden via Preferences
 const char *MQTT_SERVER = "192.168.4.1";
 const int MQTT_PORT = 1883;
+const int MQTT_MAX_RETRIES = 5;  // Increased from 3
+const int MQTT_RETRY_DELAY_BASE = 1000;  // Base delay for exponential backoff
 
 // ====== Audio Config ======
 const char *BOX_IP = "192.168.4.1";
@@ -45,6 +48,7 @@ const int AUDIO_PORT = 12345;
 #define I2S_PORT I2S_NUM_0
 #define SAMPLE_RATE 16000
 #define BUFFER_LEN 512
+#define MAX_WORDS 100  // Maximum words for display parsing
 
 // ====== Single Button Pin ======
 #define BTN_PIN 32 // Nút duy nhất: Cycle qua Class → Private → AI
@@ -420,24 +424,30 @@ void setupMQTT() {
   mqtt.setCallback(mqttCallback);
 }
 
-// ====== MQTT Reconnect ======
+// ====== MQTT Reconnect with Exponential Backoff ======
 void reconnectMQTT() {
   int attempts = 0;
-  while (!mqtt.connected() && attempts < 3) {
-    Serial.print("[MQTT] Connecting...");
+  int retryDelay = MQTT_RETRY_DELAY_BASE;
+  
+  while (!mqtt.connected() && attempts < MQTT_MAX_RETRIES) {
+    Serial.printf("[MQTT] Connecting (attempt %d/%d)...", attempts + 1, MQTT_MAX_RETRIES);
     if (mqtt.connect("SmartGlasses")) {
       Serial.println(" Connected!");
       mqtt.subscribe("glasses/text");          // Nhận text từ GV
       mqtt.subscribe("ai/answer");             // Nhận câu trả lời từ AI
       mqtt.subscribe("audio/control");         // Nhận lệnh điều khiển
-      mqtt.subscribe("classlink/config/wifi"); // ← NEW: WiFi OTA updates
-      Serial.println("[MQTT] ✅ Subscribed to classlink/config/wifi");
+      mqtt.subscribe("classlink/config/wifi"); // WiFi OTA updates
+      mqtt.subscribe("classlink/config/mqtt"); // MQTT server config updates
+      Serial.println("[MQTT] ✅ Subscribed to all topics");
+      return;
     } else {
-      Serial.printf(" Failed (rc=%d)\n", mqtt.state());
+      Serial.printf(" Failed (rc=%d), retry in %dms\n", mqtt.state(), retryDelay);
       attempts++;
-      delay(2000);
+      delay(retryDelay);
+      retryDelay = min(retryDelay * 2, 10000);  // Exponential backoff, max 10s
     }
   }
+  Serial.println("[MQTT] ❌ Max retries reached, will retry later");
 }
 
 // ====== MQTT Callback ======
@@ -513,9 +523,19 @@ void setupI2S() {
                                  .data_out_num = I2S_PIN_NO_CHANGE,
                                  .data_in_num = I2S_SD};
 
-  i2s_driver_install(I2S_PORT, &i2s_config, 0, NULL);
-  i2s_set_pin(I2S_PORT, &pin_config);
-  Serial.println("[I2S] Microphone initialized");
+  esp_err_t result = i2s_driver_install(I2S_PORT, &i2s_config, 0, NULL);
+  if (result != ESP_OK) {
+    Serial.printf("[I2S] ERROR: Driver install failed with code %d\n", result);
+    return;
+  }
+  
+  result = i2s_set_pin(I2S_PORT, &pin_config);
+  if (result != ESP_OK) {
+    Serial.printf("[I2S] ERROR: Pin config failed with code %d\n", result);
+    return;
+  }
+  
+  Serial.println("[I2S] Microphone initialized successfully");
 }
 
 // ====== OLED Setup ======
@@ -651,18 +671,22 @@ void displayText(const char *text) {
   clearDisplayBuffer();
   refreshDisplayText();
 
-  // Tách thành các từ
+  // Tách thành các từ (with bounds check)
   int wordCount = 0;
-  String words[100];
+  String words[MAX_WORDS];
 
   int startIdx = 0;
-  for (int i = 0; i <= textStr.length(); i++) {
+  for (int i = 0; i <= textStr.length() && wordCount < MAX_WORDS; i++) {
     if (i == textStr.length() || textStr[i] == ' ') {
       if (i > startIdx) {
         words[wordCount++] = textStr.substring(startIdx, i);
       }
       startIdx = i + 1;
     }
+  }
+  
+  if (wordCount >= MAX_WORDS) {
+    Serial.println("[DISPLAY] WARNING: Text truncated, too many words");
   }
 
   // Hiển thị từng từ với typewriter effect

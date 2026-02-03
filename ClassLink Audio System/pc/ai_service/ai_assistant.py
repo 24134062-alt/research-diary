@@ -12,6 +12,13 @@ from chromadb.config import Settings
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Constants
+MAX_TRANSCRIPT_ENTRIES = 50
+MAX_ANSWER_WORDS = 45
+DEFAULT_MODEL = "gemini-2.5-flash"
+RAG_CHUNK_SIZE = 500
+TRANSCRIPT_DECAY_HOURS = 1
+
 # Load config.env
 config_path = Path(__file__).parent / "config.env"
 if config_path.exists():
@@ -83,8 +90,8 @@ class AITeachingAssistant:
         # Clear old content for this file
         try:
             self.collection.delete(where={"source": filename})
-        except:
-            pass
+        except Exception as e:
+            logger.warning(f"Could not clear old content for {filename}: {e}")
         
         # Add chunks to vector DB
         ids = [f"{filename}_{i}" for i in range(len(chunks))]
@@ -101,7 +108,7 @@ class AITeachingAssistant:
         
         logger.info(f"Indexed {len(chunks)} chunks from {filename} into vector DB")
     
-    def _chunk_text(self, text: str, max_chars: int = 500) -> List[str]:
+    def _chunk_text(self, text: str, max_chars: int = RAG_CHUNK_SIZE) -> List[str]:
         """Split text into semantic chunks."""
         # Split by paragraphs first
         paragraphs = text.split('\n\n')
@@ -139,18 +146,18 @@ class AITeachingAssistant:
             'importance': importance
         })
         
-        # Keep top 50 by importance and recency
-        if len(self.teacher_transcript) > 50:
+        # Keep top entries by importance and recency
+        if len(self.teacher_transcript) > MAX_TRANSCRIPT_ENTRIES:
             # Sort by importance * recency_weight
             now = time.time()
             scored = []
             for entry in self.teacher_transcript:
-                recency = 1.0 - min(0.9, (now - entry['timestamp']) / 3600)  # Decay over 1 hour
+                recency = 1.0 - min(0.9, (now - entry['timestamp']) / (TRANSCRIPT_DECAY_HOURS * 3600))
                 score = entry['importance'] * recency
                 scored.append((score, entry))
             
             scored.sort(reverse=True)
-            self.teacher_transcript = [e for _, e in scored[:50]]
+            self.teacher_transcript = [e for _, e in scored[:MAX_TRANSCRIPT_ENTRIES]]
         
         logger.debug(f"Added teacher speech (importance={importance}): {text[:50]}...")
     
@@ -162,14 +169,16 @@ class AITeachingAssistant:
     
     def _route_model(self, question: str, subject: str = "math") -> str:
         """Route question to best model based on complexity."""
+        # Get model from env or use default
+        model_name = os.getenv("GEMINI_MODEL", DEFAULT_MODEL)
+        
         question_lower = question.lower()
         
-        # Complex math/reasoning → Pro
+        # Complex math/reasoning → Pro model (if configured)
         if any(kw in question_lower for kw in ["chứng minh", "giải thích tại sao", "phân tích"]):
-            return "gemini-2.5-flash"
+            return os.getenv("GEMINI_MODEL_PRO", model_name)
         
-        # Default: Flash (fast and cheap)
-        return "gemini-2.5-flash"
+        return model_name
     
     def _retrieve_context(self, question: str, n_results: int = 3) -> str:
         """Retrieve relevant context from vector DB."""
@@ -254,16 +263,16 @@ TRA LOI (than thien, ngan gon):
             
             # 6. Smart length limiting (cut at sentence boundary)
             words = answer.split()
-            if len(words) > 45:
+            if len(words) > MAX_ANSWER_WORDS:
                 # Try to cut at last sentence
                 sentences = answer.split('.')
                 truncated = ""
                 for s in sentences:
-                    if len(truncated.split()) + len(s.split()) < 45:
+                    if len(truncated.split()) + len(s.split()) < MAX_ANSWER_WORDS:
                         truncated += s + "."
                     else:
                         break
-                answer = truncated if truncated else " ".join(words[:45]) + "..."
+                answer = truncated if truncated else " ".join(words[:MAX_ANSWER_WORDS]) + "..."
             
             logger.info(f"AI answered via {model_name} ({len(answer)} chars): {answer}")
             return answer
@@ -342,8 +351,8 @@ TRA LOI (than thien, ngan gon):
             all_ids = self.collection.get()['ids']
             if all_ids:
                 self.collection.delete(ids=all_ids)
-        except:
-            pass
+        except Exception as e:
+            logger.warning(f"Could not clear vector DB: {e}")
         
         self.teacher_transcript = []
         self.cached_content = None

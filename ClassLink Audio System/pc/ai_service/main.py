@@ -11,9 +11,23 @@ import os
 import wave
 import io
 import time
+import threading
 import paho.mqtt.client as mqtt
 import re
 from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
+
+# Constants
+DEFAULT_AI_PORT = 12346
+DEFAULT_MAX_CONCURRENT = 6
+SAMPLE_RATE = 16000
+SAMPLE_WIDTH = 2
+CHANNELS = 1
+AUDIO_DURATION_SECONDS = 3
+MAX_AUDIO_BUFFER = SAMPLE_RATE * SAMPLE_WIDTH * AUDIO_DURATION_SECONDS  # 96000 bytes = 3s audio
+HEARTBEAT_INTERVAL = 10.0
 
 # Load environment variables from .env file
 load_dotenv()
@@ -35,15 +49,15 @@ class AIService:
     processes questions, and sends responses back.
     """
     
-    def __init__(self, listen_port: int = 12346, max_concurrent: int = 6):
+    def __init__(self, listen_port: int = None, max_concurrent: int = None):
         """
         Initialize AI Service.
         """
-        self.listen_port = listen_port
-        self.max_concurrent = max_concurrent
+        self.listen_port = listen_port or int(os.getenv("AI_SERVICE_PORT", DEFAULT_AI_PORT))
+        self.max_concurrent = max_concurrent or int(os.getenv("MAX_CONCURRENT", DEFAULT_MAX_CONCURRENT))
         
         # Thread pool for parallel processing
-        self.executor = ThreadPoolExecutor(max_workers=max_concurrent)
+        self.executor = ThreadPoolExecutor(max_workers=self.max_concurrent)
         
         # AI components
         self.ai_assistant = AITeachingAssistant()
@@ -93,8 +107,7 @@ class AIService:
         self._send_heartbeat()
     
     def _send_heartbeat(self):
-        """Send heartbeat to Pi every 10 seconds"""
-        import threading
+        """Send heartbeat to Pi every HEARTBEAT_INTERVAL seconds"""
         if self.mqtt_connected:
             try:
                 heartbeat_data = json.dumps({
@@ -106,7 +119,7 @@ class AIService:
                 logger.error(f"Heartbeat failed: {e}")
         
         # Schedule next heartbeat
-        timer = threading.Timer(10.0, self._send_heartbeat)
+        timer = threading.Timer(HEARTBEAT_INTERVAL, self._send_heartbeat)
         timer.daemon = True
         timer.start()
 
@@ -118,7 +131,6 @@ class AIService:
             
             elif msg.topic == "teacher/chat/request":
                 # Handle Teacher Chat in a separate thread
-                import threading
                 data = json.loads(msg.payload.decode())
                 text = data.get("text", "")
                 if text:
@@ -268,7 +280,7 @@ class AIService:
         self.audio_buffers[device_id].extend(audio_data)
         
         # Simple end detection: if buffer > 3 seconds worth of audio
-        if len(self.audio_buffers[device_id]) > 96000:
+        if len(self.audio_buffers[device_id]) > MAX_AUDIO_BUFFER:
             # Check capacity
             if len(self.active_requests) >= self.max_concurrent:
                 logger.warning(f"At capacity ({self.max_concurrent}), student {device_id} must wait")
@@ -294,7 +306,7 @@ class AIService:
         
         try:
             # Convert PCM to WAV
-            wav_data = self.pcm_to_wav(audio_bytes, sample_rate=16000, channels=1, sample_width=2)
+            wav_data = self.pcm_to_wav(audio_bytes, sample_rate=SAMPLE_RATE, channels=CHANNELS, sample_width=SAMPLE_WIDTH)
             
             # STT
             loop = asyncio.get_event_loop()
@@ -403,7 +415,6 @@ class AIService:
     def load_document(self, file_path: str):
         content = DocumentProcessor.extract_text(file_path)
         if content:
-            import os
             filename = os.path.basename(file_path)
             self.ai_assistant.load_lecture(content, filename)
             logger.info(f"Loaded document into vector DB: {filename}")
