@@ -166,10 +166,10 @@ class AITeachingAssistant:
         
         # Complex math/reasoning → Pro
         if any(kw in question_lower for kw in ["chứng minh", "giải thích tại sao", "phân tích"]):
-            return "gemini-1.5-pro-002"
+            return "gemini-1.5-pro"
         
         # Default: Flash (fast and cheap)
-        return "gemini-1.5-flash-002"
+        return "gemini-1.5-flash"
     
     def _retrieve_context(self, question: str, n_results: int = 3) -> str:
         """Retrieve relevant context from vector DB."""
