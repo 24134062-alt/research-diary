@@ -1234,7 +1234,8 @@ function downloadPCInstaller() {
 
     // Create download link for installer package
     const link = document.createElement('a');
-    link.href = '/api/system/pc-installer';
+    // Switch to static file download for reliability
+    link.href = '/static/downloads/ClassLink-AI-Service-v2.0.zip';
     link.download = 'ClassLink-PC-Installer.zip';
     document.body.appendChild(link);
     link.click();
