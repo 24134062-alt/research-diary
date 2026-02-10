@@ -7,6 +7,8 @@ import speech_recognition as sr
 from concurrent.futures import ThreadPoolExecutor
 from ai_assistant import AITeachingAssistant
 from document_processor import DocumentProcessor
+from websocket_handler import WebSocketHandler
+from websocket_helpers import process_question_websocket, process_audio_websocket_wrapper
 import os
 import wave
 import io
@@ -73,6 +75,9 @@ class AIService:
         # Subject Mode (Default: Math/Science)
         self.current_subject = "math" 
         
+        # WebSocket Handler for ESP32 devices
+        self.websocket_handler = WebSocketHandler(self)
+        
         # MQTT Client for Teacher Controls
         self.mqtt_client = mqtt.Client()
         self.mqtt_client.on_connect = self.on_mqtt_connect
@@ -130,9 +135,15 @@ class AIService:
                 # Handle Teacher Chat in a separate thread
                 data = json.loads(msg.payload.decode())
                 text = data.get("text", "")
+                request_id = data.get("request_id")  # Get request ID for tracking
+                session_id = data.get("session_id", "broadcast")
+                
                 if text:
                     logger.info(f"[TEACHER] Chat Request: {text}")
-                    thread = threading.Thread(target=self._handle_teacher_chat_sync, args=(text,))
+                    thread = threading.Thread(
+                        target=self._handle_teacher_chat_sync, 
+                        args=(text, request_id, session_id)
+                    )
                     thread.start()
             
             elif msg.topic == "teacher/document":
@@ -152,21 +163,31 @@ class AIService:
         except Exception as e:
             logger.error(f"MQTT Message Error: {e}")
     
-    def _handle_teacher_chat_sync(self, text: str):
+    def _handle_teacher_chat_sync(self, text: str, request_id: str = None, session_id: str = "broadcast"):
         """Synchronous handler for teacher chat"""
         try:
             # Ask AI (synchronous call)
             answer_data = self.ai_assistant.ask_question_with_visual(text, "TEACHER")
             
-            # Send response back to MQTT
+            # Send response back to MQTT with request_id for tracking
             response = {
                 "text": answer_data['text'],
-                "visual": answer_data['visual_param'] if answer_data['has_visual'] else None
+                "visual": answer_data['visual_param'] if answer_data['has_visual'] else None,
+                "request_id": request_id,  # Echo back for tracking
+                "session_id": session_id
             }
             self.mqtt_client.publish("teacher/chat/response", json.dumps(response))
             logger.info(f"[TEACHER] Sent response: {answer_data['text'][:50]}...")
         except Exception as e:
             logger.error(f"Error processing teacher chat: {e}")
+            # Send error response
+            error_response = {
+                "text": f"Lỗi: {str(e)}",
+                "request_id": request_id,
+                "session_id": session_id,
+                "error": True
+            }
+            self.mqtt_client.publish("teacher/chat/response", json.dumps(error_response))
 
     async def process_teacher_chat(self, text: str):
         """Process text from Teacher Chatbot"""
@@ -426,12 +447,22 @@ async def main():
     
     service = AIService(listen_port=12346)
     
+    # Add WebSocket processing methods as instance methods
+    service.process_audio_websocket = lambda *args, **kwargs: process_audio_websocket_wrapper(service, *args, **kwargs)
+    service.process_question_websocket = lambda *args, **kwargs: process_question_websocket(service, *args, **kwargs)
+    
+    # Load documents
     lectures_dir = "data/lectures"
     if os.path.exists(lectures_dir):
         for filename in os.listdir(lectures_dir):
             if filename.endswith(('.pdf', '.docx', '.txt')):
                 service.load_document(os.path.join(lectures_dir, filename))
     
+    # Start WebSocket server
+    logger.info("🚀 Starting WebSocket server on port 8765...")
+    await service.websocket_handler.start_server(host='0.0.0.0', port=8765)
+    
+    # Run UDP service (backwards compatible)
     await service.run()
 
 

@@ -14,6 +14,7 @@
  *************************************************/
 
 #include "../include/wifi_config.h"
+#include "websocket_client.h"
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
 #include <Arduino.h>
@@ -24,7 +25,6 @@
 #include <WiFiUdp.h>
 #include <Wire.h>
 #include <driver/i2s.h>
-
 
 // ====== WiFi Multi-Network Support ======
 WiFiNetwork wifi_list[MAX_WIFI_NETWORKS];
@@ -67,6 +67,8 @@ WiFiClient espClient;
 PubSubClient mqtt(espClient);
 WiFiUDP udp;
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+AudioWebSocketClient
+    wsClient("glasses_01"); // WebSocket client for PC communication
 
 // ====== Mode State Machine ======
 enum OperatingMode {
@@ -119,6 +121,22 @@ const unsigned long DEBOUNCE_DELAY = 300;
 
 // ====== Audio Buffer ======
 uint8_t audioBuffer[BUFFER_LEN];
+
+// ====== WebSocket AI Response Callback ======
+void onAIResponse(String text, bool hasVisual, String visualType,
+                  String visualParam) {
+  Serial.printf("[AI] Response: %s\n", text.c_str());
+
+  // Queue message for display on OLED
+  queuePush(text);
+
+  // Handle visual commands if present
+  if (hasVisual) {
+    Serial.printf("[AI] Visual: %s/%s\n", visualType.c_str(),
+                  visualParam.c_str());
+    // TODO: Implement visual command handling (draw shapes, graphs, etc.)
+  }
+}
 
 // ====== Function Prototypes ======
 void setupWiFi();
@@ -185,27 +203,28 @@ void setup() {
 
 // ====== Loop ======
 void loop() {
-  // WiFi reconnect
-  if (WiFi.status() != WL_CONNECTED) {
-    setupWiFi();
-  }
+  // Process WebSocket events (must call every loop!)
+  wsClient.loop();
 
-  // MQTT reconnect
+  // MQTT connection
   if (!mqtt.connected()) {
     reconnectMQTT();
   }
   mqtt.loop();
 
-  // Handle button press
+  // Button handling
   handleButton();
 
-  // Process message queue (non-blocking)
-  processMessageQueue();
-
-  // Audio recording & sending
-  if (isRecording && currentMode != MODE_PRIVATE) {
+  // Send audio if in AI mode
+  if (currentMode == MODE_AI_ASSISTANT && isRecording) {
     sendAudioPacket();
   }
+
+  // Message Queue Processing (OLED display)
+  processMessageQueue();
+
+  // Update display
+  updateDisplay();
 
   delay(10);
 }
@@ -312,20 +331,33 @@ void wifi_save_list() {
 
 // ====== WiFi Connect with Priority ======
 bool wifi_connect() {
-  // Try each network by priority
+  // ====== OPTIMIZATION: Scan ONCE for all networks ======
+  // Instead of scanning 5 times (once per priority), scan once and check all
+  Serial.println("[WiFi] Scanning available networks...");
+  int n = WiFi.scanNetworks();
+
+  if (n == 0) {
+    Serial.println("[WiFi] ❌ No networks found");
+    return false;
+  }
+
+  Serial.printf("[WiFi] Found %d networks\n", n);
+
+  // Try each saved network by priority
   for (int i = 0; i < MAX_WIFI_NETWORKS; i++) {
     if (wifi_list[i].ssid[0] == '\0')
       continue;
 
     Serial.printf("[WiFi] Trying priority %d: %s", i, wifi_list[i].ssid);
 
-    // Scan for available networks
-    int n = WiFi.scanNetworks();
+    // Check if this SSID exists in scan results
     bool found = false;
+    int rssi = -100;
 
     for (int j = 0; j < n; j++) {
       if (WiFi.SSID(j) == String(wifi_list[i].ssid)) {
         found = true;
+        rssi = WiFi.RSSI(j);
         break;
       }
     }
@@ -335,20 +367,35 @@ bool wifi_connect() {
       continue;
     }
 
-    // Try to connect
+    Serial.printf(" (RSSI: %d dBm)", rssi);
+
+    // Try to connect with exponential backoff
     WiFi.begin(wifi_list[i].ssid, wifi_list[i].password);
 
     int attempts = 0;
+    int backoff_ms = 500; // Start at 500ms
+
     while (WiFi.status() != WL_CONNECTED && attempts < 20) {
-      delay(500);
+      delay(backoff_ms);
       Serial.print(".");
       digitalWrite(LED_STATUS_PIN, !digitalRead(LED_STATUS_PIN));
       attempts++;
+
+      // Exponential backoff: 500ms → 1s → 2s → 4s (max)
+      if (attempts % 2 == 0 && backoff_ms < 4000) {
+        backoff_ms *= 2;
+      }
     }
 
     if (WiFi.status() == WL_CONNECTED) {
       Serial.printf("\n[WiFi] ✅ Connected to %s\n", wifi_list[i].ssid);
       digitalWrite(LED_STATUS_PIN, HIGH);
+
+      // Initialize WebSocket client for PC AI Service
+      wsClient.begin("192.168.4.1", 8765);
+      wsClient.setResponseCallback(onAIResponse);
+      Serial.println("[WS] WebSocket client initialized");
+
       return true;
     } else {
       Serial.println(" - Failed");
@@ -356,7 +403,7 @@ bool wifi_connect() {
     }
   }
 
-  Serial.println("[WiFi] ❌ No available networks");
+  Serial.println("[WiFi] ❌ No available networks from saved list");
   return false;
 }
 
@@ -398,9 +445,12 @@ void wifi_ota_update(const char *new_ssid, const char *new_password) {
   // Add to list (priority 1, right after CLASS-BOX)
   wifi_add_network(new_ssid, new_password, 1);
 
-  // Wait for ESP32 Box to restart
-  Serial.println("[WiFi] ⏰ Waiting 3 seconds for ESP32 Box to restart...");
-  for (int i = 3; i > 0; i--) {
+  // Wait for ESP32 Box to restart AP
+  // Increased from 3s to 12s to prevent race condition:
+  // - Box needs 10s to broadcast + restart AP (~2-3s restart time)
+  // - Total safe window: 10 + 3 = 13s, we use 12s to stay synchronized
+  Serial.println("[WiFi] ⏰ Waiting 12 seconds for ESP32 Box to restart AP...");
+  for (int i = 12; i > 0; i--) {
     Serial.printf("[WiFi]    Reconnecting in %d seconds...\n", i);
     delay(1000);
   }
@@ -733,7 +783,23 @@ void displayText(const char *text) {
 void sendAudioPacket() {
   size_t bytesRead = 0;
 
-  i2s_read(I2S_PORT, audioBuffer, BUFFER_LEN, &bytesRead, portMAX_DELAY);
+  // SAFETY FIX: Use timeout instead of portMAX_DELAY to prevent infinite hang
+  // If I2S fails or mic disconnects, this prevents the entire loop from
+  // freezing
+  esp_err_t result = i2s_read(I2S_PORT, audioBuffer, BUFFER_LEN, &bytesRead,
+                              pdMS_TO_TICKS(100)); // 100ms timeout
+
+  // Error handling: Check if read failed or timed out
+  if (result != ESP_OK) {
+    if (result == ESP_ERR_TIMEOUT) {
+      // Timeout is normal if mic is quiet or no audio, don't spam logs
+      return;
+    } else {
+      // Other error - log it
+      Serial.printf("[I2S][ERROR] Read failed: %d\n", result);
+      return;
+    }
+  }
 
   if (bytesRead > 0) {
     // Header: 4 bytes sequence + 1 byte flags
@@ -751,10 +817,23 @@ void sendAudioPacket() {
     packet[4] = flags;
     memcpy(packet + 5, audioBuffer, bytesRead);
 
-    // Send UDP
-    udp.beginPacket(BOX_IP, AUDIO_PORT);
-    udp.write(packet, 5 + bytesRead);
-    udp.endPacket();
+    // Send via WebSocket (faster & more reliable)
+    if (wsClient.isConnected()) {
+      wsClient.sendAudio(audioBuffer, bytesRead, flags, packetSequence);
+    } else {
+      // Fallback to UDP if WebSocket disconnected
+      Serial.println("[WARN] WebSocket down, using UDP fallback");
+      udp.beginPacket(BOX_IP, AUDIO_PORT);
+      size_t written = udp.write(packet, 5 + bytesRead);
+      int result = udp.endPacket();
+
+      if (result == 0) {
+        Serial.println("[UDP][ERROR] Audio packet send failed");
+      } else if (written != (5 + bytesRead)) {
+        Serial.printf("[UDP][WARN] Partial send: %d/%d bytes\n", written,
+                      5 + bytesRead);
+      }
+    }
 
     packetSequence++;
   }
