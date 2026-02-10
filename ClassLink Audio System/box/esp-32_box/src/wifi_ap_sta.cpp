@@ -119,6 +119,44 @@ void wifi_init() {
   // Load credentials from storage or use defaults
   load_credentials();
 
+  // ====== NEW: Check OTA rollback watchdog ======
+  prefs.begin(WIFI_PREFS_NAMESPACE, false);
+  unsigned long rollback_deadline = prefs.getULong("rollback_time", 0);
+  prefs.end();
+
+  if (rollback_deadline > 0 && millis() > rollback_deadline) {
+    // Deadline passed - check if any devices connected
+    uint8_t connected = WiFi.softAPgetStationNum();
+
+    if (connected == 0) {
+      Serial.println("[WIFI][WARN] ========================================");
+      Serial.println("[WIFI][WARN] OTA Rollback Triggered!");
+      Serial.println("[WIFI][WARN] No devices connected within 60s");
+      Serial.println("[WIFI][WARN] Rolling back to CLASS-BOX default...");
+      Serial.println("[WIFI][WARN] ========================================");
+
+      // Clear rollback timer and reset to default
+      prefs.begin(WIFI_PREFS_NAMESPACE, false);
+      prefs.remove("rollback_time");
+      prefs.remove("ssid");
+      prefs.remove("password");
+      prefs.end();
+
+      // Load defaults
+      strncpy(current_creds.ssid, DEFAULT_SSID, WIFI_SSID_MAX_LEN);
+      strncpy(current_creds.password, DEFAULT_PASSWORD, WIFI_PASS_MAX_LEN);
+      current_creds.isValid = true;
+    } else {
+      // Devices connected - OTA success, clear timer
+      Serial.printf("[WIFI][OK] %d device(s) connected, OTA successful\n",
+                    connected);
+      prefs.begin(WIFI_PREFS_NAMESPACE, false);
+      prefs.remove("rollback_time");
+      prefs.end();
+    }
+  }
+  // ====== END OTA rollback check ======
+
   // Try to start AP with loaded credentials
   if (start_ap(current_creds.ssid, current_creds.password)) {
     wifi_started = true;
@@ -189,6 +227,18 @@ bool wifi_update_credentials(const char *new_ssid, const char *new_password) {
     Serial.println(
         "[WIFI][ERROR] Failed to save credentials, but will try to apply");
   }
+
+  // ====== NEW: Set OTA rollback watchdog (60 seconds) ======
+  // If no devices connect within 60s, auto-rollback to CLASS-BOX
+  prefs.begin(WIFI_PREFS_NAMESPACE, false);
+  unsigned long deadline = millis() + 60000; // 60 seconds from now
+  prefs.putULong("rollback_time", deadline);
+  prefs.end();
+
+  Serial.println("[WIFI] ⏲️  Rollback watchdog set: 60 seconds");
+  Serial.println(
+      "[WIFI]    If no devices connect, will auto-revert to CLASS-BOX");
+  // ====== END rollback watchdog ======
 
   // Restart AP with new credentials
   wifi_restart_ap();

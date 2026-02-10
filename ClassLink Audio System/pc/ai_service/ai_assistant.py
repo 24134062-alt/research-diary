@@ -6,8 +6,8 @@ import re
 import time
 from pathlib import Path
 from dotenv import load_dotenv
-import chromadb
-from chromadb.config import Settings
+# import chromadb  # Commented out - too heavy for Raspberry Pi, not needed for WebSocket
+# from chromadb.config import Settings
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

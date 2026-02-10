@@ -220,12 +220,13 @@ void mqtt_callback(char *topic, byte *payload, unsigned int length) {
 
     Serial.printf("[MQTT] Updating WiFi AP to: %s\n", new_ssid);
 
-    // ⏰ CRITICAL: Wait 3 seconds for other devices (Glasses, Micro) to receive
-    // this message All devices subscribe to the same topic and must save
-    // credentials before ESP32 Box restarts AP
+    // ⏰ CRITICAL: Wait 10 seconds for other devices (Glasses, Micro) to
+    // receive this message. All devices must save credentials before ESP32 Box
+    // restarts AP. Increased from 3s to 10s to prevent race condition where
+    // devices reconnect before AP is fully restarted.
     Serial.println(
-        "[MQTT] ⏰ Waiting 3 seconds for other devices to receive config...");
-    for (int i = 3; i > 0; i--) {
+        "[MQTT] ⏰ Waiting 10 seconds for other devices to receive config...");
+    for (int i = 10; i > 0; i--) {
       Serial.printf("[MQTT]    Restarting WiFi AP in %d seconds...\n", i);
       delay(1000);
     }

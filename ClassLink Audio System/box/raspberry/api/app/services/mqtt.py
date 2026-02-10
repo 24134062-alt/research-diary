@@ -102,9 +102,23 @@ class MQTTService:
                 )
                 
             elif topic == "teacher/chat/response":
-                # AI answering. We assume the AI echoes the session_id or we default to broadcast for now
+                # AI answering. Check for pending web request
                 session_id = data.get("session_id", "broadcast")
+                request_id = data.get("request_id")
                 text = data.get("text", "")
+                
+                # Notify pending web request if exists
+                if request_id:
+                    try:
+                        from ..main import pending_ai_requests
+                        if request_id in pending_ai_requests:
+                            pending_ai_requests[request_id]["response"] = data
+                            pending_ai_requests[request_id]["event"].set()
+                            print(f"[MQTT] Notified pending request: {request_id}")
+                    except Exception as e:
+                        print(f"Failed to notify pending request: {e}")
+                
+                # Log to chat history
                 self.add_chat_log(session_id, "ai", text, data.get("visual", None))
                 
                 # Also add to global transcription for dashboard

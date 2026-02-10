@@ -66,8 +66,7 @@ void OLEDDisplay::begin() {
   }
 
   // AR OPTIMIZATION: Max brightness for combiner glass
-  display.dim(false);       // No dimming - full brightness
-  display.setContrast(255); // Maximum contrast
+  display.dim(false); // No dimming - full brightness
 
   display.clearDisplay();
   display.setTextColor(SSD1306_WHITE);

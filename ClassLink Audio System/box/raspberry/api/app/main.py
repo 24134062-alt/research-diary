@@ -5,6 +5,7 @@ import uvicorn
 import asyncio
 from pathlib import Path
 import time
+import uuid
 from .services.mqtt import MQTTService
 from .services.uart import UARTService
 from .services.wifi_monitor import WiFiMonitor
@@ -26,6 +27,9 @@ activity_log = []
 
 # In-memory transcription storage (Teacher speech & AI answers)
 transcription_history = []
+
+# Pending AI chat requests (for async waiting)
+pending_ai_requests = {}
 
 def add_activity(message, icon="info-circle"):
     global activity_log
@@ -136,14 +140,52 @@ async def set_subject(subject: str):
 
 @app.post("/api/chat/send")
 async def send_chat(data: dict):
-    """Teacher sending message to AI"""
+    """Teacher sending message to AI - waits for response"""
     text = data.get("text")
     session_id = data.get("session_id", "broadcast")
     
-    if text:
-        mqtt_service.send_chat_to_ai(text, session_id)
-        return {"status": "sent", "text": text, "session_id": session_id}
-    return {"status": "error", "message": "No text provided"}
+    if not text:
+        return {"status": "error", "message": "No text provided"}
+    
+    # Generate unique request ID
+    request_id = str(uuid.uuid4())
+    
+    # Create event to wait for response
+    event = asyncio.Event()
+    pending_ai_requests[request_id] = {
+        "event": event,
+        "response": None,
+        "timestamp": time.time()
+    }
+    
+    # Send to AI with request_id
+    mqtt_service.publish("teacher/chat/request", {
+        "text": text,
+        "session_id": session_id,
+        "request_id": request_id,
+        "source": "web_dashboard"
+    })
+    
+    # Wait for response (timeout 30s)
+    try:
+        await asyncio.wait_for(event.wait(), timeout=30.0)
+        response_data = pending_ai_requests[request_id]["response"]
+        del pending_ai_requests[request_id]
+        
+        return {
+            "status": "success",
+            "text": response_data.get("text", ""),
+            "visual": response_data.get("visual"),
+            "session_id": session_id
+        }
+    except asyncio.TimeoutError:
+        # Cleanup and return timeout error
+        if request_id in pending_ai_requests:
+            del pending_ai_requests[request_id]
+        return {
+            "status": "timeout",
+            "message": "AI Service không phản hồi trong 30 giây. Kiểm tra PC AI Service."
+        }
 
 @app.get("/api/chat/history")
 async def get_chat_history():
