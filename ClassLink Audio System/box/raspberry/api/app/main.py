@@ -74,10 +74,10 @@ uart_service.set_callback(bridge_uart_to_mqtt)
 # -------------------------------------
 
 # Get absolute path to static directory
-BASE_DIR = Path(__file__).resolve().parent
-STATIC_DIR = BASE_DIR / "static"
+STATIC_DIR = Path(__file__).resolve().parent / "static"
+logger.info(f"📂 Static directory: {STATIC_DIR}")
 
-# Mount Static Files ONCE with absolute path (including downloads subfolder)
+# Mount /static for assets prefixed with /static
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 # Include routers
@@ -87,6 +87,9 @@ app.include_router(wifi_manager.router, prefix="/api/wifi-manager", tags=["WiFi 
 app.include_router(stt.router, prefix="/api", tags=["STT"])
 app.include_router(system.router, prefix="/api/system", tags=["System"])
 app.include_router(document.router, prefix="/api/document", tags=["Document"])
+
+# Mount root to serve assets like style.css, logo.png directly
+app.mount("/", StaticFiles(directory=str(STATIC_DIR), html=True), name="root_static")
 
 
 @app.on_event("startup")
@@ -103,9 +106,9 @@ async def startup_event():
     # Start UDP Audio Gateway
     asyncio.create_task(audio_gateway.start())
 
-@app.get("/")
-async def read_root():
-    return FileResponse(str(STATIC_DIR / 'index.html'))
+@app.get("/favicon.ico")
+async def favicon():
+    return FileResponse(str(STATIC_DIR / 'favicon.ico'))
 
 @app.get("/api/devices")
 def get_devices():
@@ -147,8 +150,8 @@ async def send_chat(data: dict):
     if not text:
         return {"status": "error", "message": "No text provided"}
     
-    # Generate unique request ID
-    request_id = str(uuid.uuid4())
+    # Log teacher message to history
+    mqtt_service.add_chat_log(session_id, "teacher", text)
     
     # Create event to wait for response
     event = asyncio.Event()

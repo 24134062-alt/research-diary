@@ -1,195 +1,101 @@
 """
-Document Upload API - Cho phép giáo viên upload tài liệu bài giảng
+Document Upload API - Cầu nối nhẹ (Lightweight Bridge) cho Pi Zero 2 W
+Nhận file từ Web và gửi thẳng sang PC qua MQTT để xử lý.
 """
 from fastapi import APIRouter, UploadFile, File, HTTPException
-from fastapi.responses import JSONResponse
-import os
+import base64
 import logging
-import uuid
-import magic
-from pathlib import Path
-
-# Import document processor (optional - may not be available on Pi)
-try:
-    import sys
-    # Add PC AI service path to import DocumentProcessor
-    # c:\Users\DELL\research-diary-1\ClassLink Audio System\box\raspberry\api\app\routes\document.py
-    # parents: 1:routes, 2:app, 3:api, 4:raspberry, 5:box, 6:ClassLink Audio System
-    root_path = Path(__file__).parent.parent.parent.parent.parent.parent
-    pc_service_path = root_path / "pc" / "ai_service"
-    if pc_service_path.exists():
-        sys.path.insert(0, str(pc_service_path))
-    from document_processor import DocumentProcessor
-    PROCESSOR_AVAILABLE = True
-except Exception as e:
-    PROCESSOR_AVAILABLE = False
-    print(f"[WARN] DocumentProcessor not available: {e}")
 
 logger = logging.getLogger(__name__)
-
 router = APIRouter()
 
-# Storage for current document
-UPLOAD_DIR = Path(__file__).parent.parent / "uploads"
-UPLOAD_DIR.mkdir(exist_ok=True)
-
-# In-memory state
-current_document = {
-    "filename": None,
-    "content": None,
-    "uploaded_at": None
-}
-
-# MQTT service reference (will be set from main.py)
+# MQTT service reference (được set từ main.py)
 mqtt_service = None
 
+# Lưu trạng thái tài liệu trong bộ nhớ
+current_doc = {
+    "filename": None,
+    "content_length": 0,
+    "status": "none"
+}
+
 def set_mqtt_service(service):
-    """Set MQTT service for publishing document content"""
     global mqtt_service
     mqtt_service = service
 
 @router.post("/upload")
 async def upload_document(file: UploadFile = File(...)):
     """
-    Upload tài liệu bài giảng (PDF, DOCX, TXT)
-    Bảo mật: Kiểm tra MIME, giới hạn 10MB, Sanitize tên file
+    Nhận file và gửi sang PC. Giới hạn 10MB.
     """
-    # 1. Giới hạn kích thước file (10MB)
-    MAX_SIZE = 10 * 1024 * 1024 # 10MB
+    global current_doc
+    # 1. Giới hạn 10MB để bảo vệ RAM của Pi
+    MAX_SIZE = 10 * 1024 * 1024 
     content = await file.read()
-    if len(content) > MAX_SIZE:
+    file_size = len(content)
+    
+    if file_size > MAX_SIZE:
         raise HTTPException(status_code=400, detail="File quá lớn. Tối đa 10MB.")
 
-    # 2. Validate file type (Dựa trên Extension và MIME)
-    allowed_extensions = ['.pdf', '.docx', '.txt']
-    allowed_mimes = [
-        'application/pdf', 
-        'application/vnd.openxmlformats-officedocument.wordprocessingml.document', # DOCX
-        'text/plain'
-    ]
-    
-    file_ext = os.path.splitext(file.filename)[1].lower()
-    
-    # Kiểm tra MIME bằng python-magic
-    mime_type = magic.from_buffer(content, mime=True)
-    
-    if file_ext not in allowed_extensions or mime_type not in allowed_mimes:
-        logger.warning(f"Rejected malicious upload: {file.filename} (Extension: {file_ext}, MIME: {mime_type})")
-        raise HTTPException(
-            status_code=400, 
-            detail="Loại file không hợp lệ hoặc không an toàn."
-        )
-    
     try:
-        # 3. Sanitize filename (Dùng UUID để tránh Path Traversal)
-        safe_filename = f"{uuid.uuid4()}{file_ext}"
-        file_path = UPLOAD_DIR / safe_filename
+        # 2. Chuyển sang Base64 để gửi qua MQTT
+        encoded_content = base64.b64encode(content).decode('utf-8')
         
-        with open(file_path, 'wb') as f:
-            f.write(content)
-        
-        logger.info(f"Saved secure file: {safe_filename} (original: {file.filename})")
-        
-        # Extract text content
-        text_content = ""
-        if PROCESSOR_AVAILABLE:
-            try:
-                text_content = DocumentProcessor.extract_text(str(file_path))
-            except Exception as e:
-                logger.error(f"Error extracting text with DocumentProcessor: {e}")
-                text_content = f"Lỗi xử lý nội dung: {str(e)}"
-        else:
-            # Fallback: read as text if possible
-            if file_ext == '.txt':
-                text_content = content.decode('utf-8', errors='ignore')
-            else:
-                text_content = f"Không thể xử lý định dạng {file_ext} (Thiếu bộ xử lý tài liệu)"
-        
-        # Update current document state
-        import time
-        current_document["filename"] = file.filename
-        current_document["content"] = text_content
-        current_document["uploaded_at"] = time.strftime("%Y-%m-%d %H:%M:%S")
-        
-        # Send to PC AI Service via MQTT
+        # 3. Gửi sang PC AI Service
         if mqtt_service:
             mqtt_service.publish("teacher/document", {
                 "action": "load",
                 "filename": file.filename,
-                "content": text_content[:50000]  # Limit content size
+                "base64_content": encoded_content,
+                "is_raw": True
             })
-            logger.info(f"Sent document to PC AI Service: {file.filename}")
+            logger.info(f"🚀 Đã chuyển tiếp file {file.filename} sang PC qua MQTT")
             
-            # Add to activity log (dynamic display on dashboard)
+            # Cập nhật trạng thái để Dashboard hiển thị
+            current_doc["filename"] = file.filename
+            current_doc["content_length"] = file_size
+            current_doc["status"] = "loaded"
+
+            # Lưu log hoạt động
             try:
                 from ..main import add_activity
-                add_activity(f"Giáo viên đã tải lên: {file.filename}", "file-alt")
-            except Exception as e:
-                logger.warning(f"Failed to log activity: {e}")
+                add_activity(f"Đã tải lên tài liệu: {file.filename}", "file-medical")
+            except: pass
         
-        return JSONResponse({
-            "status": "success",
-            "message": f"Đã upload thành công: {file.filename}",
+        return {
+            "status": "success", 
+            "message": f"Đã gửi {file.filename} sang PC thành công.",
             "filename": file.filename,
-            "content_length": len(text_content),
-            "preview": text_content[:200] + "..." if len(text_content) > 200 else text_content
-        })
-        
+            "content_length": file_size
+        }
     except Exception as e:
-        logger.error(f"Upload failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Lỗi upload: {str(e)}")
-
+        logger.error(f"Lỗi chuyển tiếp file: {e}")
+        raise HTTPException(status_code=500, detail=f"Lỗi hệ thống: {str(e)}")
 
 @router.get("/current")
 async def get_current_document():
-    """Lấy thông tin tài liệu hiện tại"""
-    if not current_document["filename"]:
-        return {"status": "empty", "message": "Chưa có tài liệu nào được upload"}
-    
+    """Lấy trạng thái tài liệu hiện tại"""
+    if current_doc["status"] == "loaded":
+        return {
+            "status": "loaded",
+            "filename": current_doc["filename"],
+            "content_length": current_doc["content_length"]
+        }
     return {
-        "status": "loaded",
-        "filename": current_document["filename"],
-        "uploaded_at": current_document["uploaded_at"],
-        "content_length": len(current_document["content"] or ""),
-        "preview": (current_document["content"] or "")[:300]
+        "status": "ready",
+        "message": "Sẵn sàng nhận tài liệu.",
+        "mode": "bridge"
     }
-
 
 @router.delete("/clear")
 async def clear_document():
-    """Xóa tài liệu hiện tại"""
-    global current_document
-    
-    old_filename = current_document["filename"]
-    
-    # Clear state
-    current_document = {
-        "filename": None,
-        "content": None,
-        "uploaded_at": None
-    }
-    
-    # Notify PC AI Service to clear context
+    """Xóa tài liệu trên PC"""
+    global current_doc
     if mqtt_service:
-        mqtt_service.publish("teacher/document", {
-            "action": "clear"
-        })
+        mqtt_service.publish("teacher/document", {"action": "clear"})
     
-    # Delete uploaded file
-    if old_filename:
-        # Chúng ta không nên xóa bằng filename của user truyền lên mà nên lưu mapping
-        # Trong MVP này, chúng ta xóa tất cả file trong UPLOAD_DIR khi clear
-        for f in UPLOAD_DIR.glob("*"):
-            try:
-                os.remove(f)
-            except:
-                pass
+    current_doc["filename"] = None
+    current_doc["content_length"] = 0
+    current_doc["status"] = "none"
     
-    # Add to activity log
-    try:
-        from ..main import add_activity
-        add_activity("Giáo viên đã xóa tài liệu bài giảng", "trash")
-    except Exception as e:
-        logger.warning(f"Failed to log activity for document clear: {e}")
-    
-    return {"status": "success", "message": "Đã xóa tài liệu"}
+    return {"status": "success", "message": "Đã xóa dữ liệu tài liệu"}

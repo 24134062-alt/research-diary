@@ -6,7 +6,7 @@ import json
 import speech_recognition as sr
 from concurrent.futures import ThreadPoolExecutor
 from ai_assistant import AITeachingAssistant
-from document_processor import DocumentProcessor
+# from document_processor import DocumentProcessor  # Not needed for WebSocket
 from websocket_handler import WebSocketHandler
 from websocket_helpers import process_question_websocket, process_audio_websocket_wrapper
 import os
@@ -17,6 +17,8 @@ import threading
 import paho.mqtt.client as mqtt
 import re
 from dotenv import load_dotenv
+import base64
+import tempfile
 
 # Load environment variables from .env file
 load_dotenv()
@@ -152,10 +154,40 @@ class AIService:
                 action = data.get("action", "")
                 
                 if action == "load":
-                    content = data.get("content", "")
                     filename = data.get("filename", "lecture.txt")
-                    self.ai_assistant.load_lecture(content, filename)
-                    logger.info(f"📄 LOADED DOCUMENT into vector DB: {filename} ({len(content)} chars)")
+                    
+                    # New: Handle raw base64 content from Pi Zero 2 W
+                    if data.get("is_raw") and "base64_content" in data:
+                        try:
+                            logger.info(f"📥 Receiving raw file from Pi: {filename}")
+                            # Correct way: Decode the base64 content received from the Pi
+                            file_bytes = base64.b64decode(data["base64_content"])
+                            
+                            # Create a temporary file to use with DocumentProcessor
+                            suffix = os.path.splitext(filename)[1]
+                            with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+                                tmp.write(file_bytes)
+                                tmp_path = tmp.name
+                            
+                            # Extract text using PC resources
+                            from document_processor import DocumentProcessor
+                            content = DocumentProcessor.extract_text(tmp_path)
+                            
+                            # Cleanup
+                            os.unlink(tmp_path)
+                        except Exception as decode_err:
+                            logger.error(f"Error decoding raw document: {decode_err}")
+                            content = ""
+                    else:
+                        # Standard text content
+                        content = data.get("content", "")
+                        
+                    if content:
+                        self.ai_assistant.load_lecture(content, filename)
+                        logger.info(f"📄 LOADED DOCUMENT into vector DB: {filename} ({len(content)} chars)")
+                    else:
+                        logger.warning(f"📄 Document {filename} resulted in empty content. RAG may not work.")
+
                 elif action == "clear":
                     self.ai_assistant.clear_context()
                     logger.info("📄 CLEARED DOCUMENT CONTEXT")
@@ -208,6 +240,29 @@ class AIService:
             "visual": answer_data['visual_param'] if answer_data['has_visual'] else None
         }
         self.mqtt_client.publish("teacher/chat/response", json.dumps(response))
+    
+    async def process_text_question(self, text: str):
+        """Process text question from web dashboard"""
+        logger.info(f"[WebSocket] Processing text question: {text}")
+        
+        try:
+            # Ask AI
+            loop = asyncio.get_event_loop()
+            answer_data = await loop.run_in_executor(
+                self.executor,
+                self.ai_assistant.ask_question_with_visual,
+                text,
+                "WEB_DASHBOARD"
+            )
+            
+            answer_text = answer_data.get('text', 'Xin lỗi, không có câu trả lời')
+            logger.info(f"[WebSocket] Answer: {answer_text[:100]}...")
+            
+            return answer_text
+            
+        except Exception as e:
+            logger.error(f"[WebSocket] Error processing text question: {e}")
+            raise
 
     def normalize_text_by_mode(self, text: str) -> str:
         """

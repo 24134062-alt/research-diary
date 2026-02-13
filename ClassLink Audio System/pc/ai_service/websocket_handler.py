@@ -61,9 +61,39 @@ class WebSocketHandler:
                             'type': 'heartbeat_ack',
                             'timestamp': data.get('timestamp')
                         }))
+                    
+                    elif msg_type == 'question':
+                        # Handle text question from web dashboard
+                        question_text = data.get('text', '').strip()
+                        if not question_text:
+                            logger.warning("[WebSocket] Empty question received")
+                            continue
+                        
+                        logger.info(f"[WebSocket] Text question from {device_id or remote_addr}: {question_text}")
+                        
+                        # Process with AI
+                        try:
+                            answer = await self.ai_service.process_text_question(question_text)
+                            
+                            # Send response
+                            await websocket.send(json.dumps({
+                                'type': 'answer',
+                                'text': answer,
+                                'timestamp': data.get('timestamp')
+                            }))
+                            
+                            logger.info(f"[WebSocket] Sent answer: {answer[:100]}...")
+                            
+                        except Exception as e:
+                            logger.error(f"[WebSocket] Error processing question: {e}")
+                            await websocket.send(json.dumps({
+                                'type': 'error',
+                                'message': 'Xin lỗi, có lỗi xảy ra khi xử lý câu hỏi'
+                            }))
                         
                     else:
                         logger.warning(f"[WebSocket] Unknown message type: {msg_type}")
+
                         
                 except json.JSONDecodeError:
                     logger.error(f"[WebSocket] Invalid JSON from {device_id or remote_addr}")

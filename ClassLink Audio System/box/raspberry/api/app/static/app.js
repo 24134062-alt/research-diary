@@ -493,54 +493,63 @@ function selectSession(sessionId) {
 }
 
 function renderChat(sessionId) {
-    const chatContainer = document.getElementById('teacher-chat-history');
-    if (!chatContainer) return;
+    // We update BOTH containers if they exist to be safe, 
+    // or specifically target the interact one if on that tab.
+    const containers = [
+        document.getElementById('teacher-chat-history'),
+        document.getElementById('teacher-chat-history-interact')
+    ];
 
-    // Safety check if session exists, else default to empty
     const messages = chatSessions[sessionId] || [];
 
-    if (messages.length === 0) {
-        chatContainer.innerHTML = '<div class="empty-state"><p>Chưa có hội thoại nào</p></div>';
-        return;
-    }
+    containers.forEach(chatContainer => {
+        if (!chatContainer) return;
 
-    // Optimization: if last message ID is same, skip full render? 
-    // Ideally yes, but for simplicity/correctness with session switching, we re-render.
-    // We can just verify if container has same number of children + same last ID to skip.
+        if (messages.length === 0) {
+            chatContainer.innerHTML = '<div class="empty-state"><p>Chưa có hội thoại nào</p></div>';
+            return;
+        }
 
-    chatContainer.innerHTML = messages.map(msg => {
-        const isSelf = msg.sender === 'teacher';
-        const isSystem = msg.sender === 'system' || msg.sender === 'student_log';
+        chatContainer.innerHTML = messages.map(msg => {
+            const isSelf = msg.sender === 'teacher';
+            const isSystem = msg.sender === 'system' || msg.sender === 'student_log';
 
-        if (isSystem || msg.sender === 'student_log') {
+            if (isSystem || msg.sender === 'student_log') {
+                return `
+                    <div class="message-bubble log">
+                       ${msg.text.replace(/\n/g, '<br>')}
+                       <div class="msg-meta">${msg.timestamp}</div>
+                    </div>
+                `;
+            }
             return `
-                <div class="message-bubble log">
-                   ${msg.text.replace(/\n/g, '<br>')}
-                   <div class="msg-meta">${msg.timestamp}</div>
-                   ${msg.sender === 'student_log' ? `<button class="btn-xs" style="margin-top:5px" onclick="fillChat('Sửa câu trả lời: ', '')">Sửa lỗi</button>` : ''}
+                <div class="message-bubble ${isSelf ? 'sent' : 'received'}">
+                    ${msg.text}
+                    <div class="msg-meta">${msg.sender === 'ai' ? 'Trợ lý AI' : 'Giáo viên'} • ${msg.timestamp}</div>
                 </div>
             `;
-        }
-        return `
-            <div class="message-bubble ${isSelf ? 'sent' : 'received'}">
-                ${msg.text}
-                <div class="msg-meta">${msg.sender === 'ai' ? 'Trợ lý AI' : 'Giáo viên'} • ${msg.timestamp}</div>
-            </div>
-        `;
-    }).join('');
+        }).join('');
 
-    chatContainer.scrollTop = chatContainer.scrollHeight;
+        chatContainer.scrollTop = chatContainer.scrollHeight;
+    });
 }
 
 async function sendMessage() {
     const input = document.getElementById('chat-input');
+    if (!input) return;
     const text = input.value.trim();
     if (!text) return;
 
     input.value = '';
 
+    // Add temporary message to UI for better UX
+    const tempMsg = { sender: 'teacher', text: text, timestamp: new Date().toLocaleTimeString() };
+    if (!chatSessions[currentSessionId]) chatSessions[currentSessionId] = [];
+    chatSessions[currentSessionId].push(tempMsg);
+    renderChat(currentSessionId);
+
     try {
-        await fetch(`${API_URL}/api/chat/send`, {
+        const response = await fetch(`${API_URL}/api/chat/send`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -548,14 +557,24 @@ async function sendMessage() {
                 session_id: currentSessionId
             })
         });
-        fetchChatHistory();
+
+        const result = await response.json();
+        if (result.status === 'success') {
+            fetchChatHistory(); // Refresh to get the AI response
+        } else {
+            showToast('⚠️ AI: ' + (result.message || 'Lỗi phản hồi'), 'warning');
+        }
     } catch (e) {
         console.error("Sending failed:", e);
+        showToast('❌ Không thể gửi tin nhắn. Kiểm tra kết nối Pi!', 'error');
     }
 }
 
 function handleEnter(e) {
-    if (e.key === 'Enter') sendMessage();
+    if (e.key === 'Enter') {
+        e.preventDefault(); // Stop any default behavior
+        sendMessage();
+    }
 }
 
 function fillChat(prefix, content) {

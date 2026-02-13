@@ -48,8 +48,14 @@ class UARTService:
                             self._handle_line(line)
                 except Exception as e:
                     print(f"[ERROR] UART read error: {e}")
+                    # If I/O error, usually means port is dead or disconnected on Pi
+                    if "Input/output error" in str(e):
+                        print("[UART] Critical I/O error. Switching to MOCK mode to avoid log spam.")
+                        try: self.ser.close()
+                        except: pass
+                        self.ser = None # Fallback to MOCK mode
             
-            await asyncio.sleep(0.1)
+            await asyncio.sleep(0.1 if self.ser else 5.0) # Slow down if in MOCK mode
 
     def stop(self):
         self.running = False
